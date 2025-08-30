@@ -6,6 +6,7 @@
     <title>Legal Task Manager</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2c3e50">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
@@ -325,8 +326,42 @@
 
         .tabs {
             display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 25px;
             border-bottom: 2px solid var(--light-bg);
+        }
+
+        .tabs-container {
+            display: flex;
+        }
+
+        .tab-actions {
+            display: flex;
+            gap: 10px;
+            margin-right: 10px;
+        }
+
+        .tab-action-btn {
+            background: none;
+            border: none;
+            color: var(--light-text);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .tab-action-btn:hover {
+            background: var(--light-bg);
+            color: var(--secondary-color);
+            transform: translateY(-1px);
+        }
+
+        .tab-action-btn:active {
+            transform: translateY(0);
         }
 
         .tab {
@@ -466,6 +501,36 @@
         }
 
         .task-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-deadline {
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+            background: var(--light-bg);
+            color: var(--light-text);
+            user-select: text;
+            cursor: text;
+        }
+
+        .task-deadline.overdue {
+            background: var(--accent-color);
+            color: var(--white);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        .task-action-buttons {
             display: flex;
             gap: 10px;
         }
@@ -706,7 +771,16 @@
         /* Drag and Drop Styles */
         .task-item {
             cursor: grab;
-            user-select: none;
+        }
+        
+        .task-title, .task-customer, .sub-task-text {
+            user-select: text;
+            cursor: text;
+        }
+        
+        .task-item div[style*="color: var(--light-text)"] {
+            user-select: text;
+            cursor: text;
         }
 
         .task-item:active {
@@ -788,13 +862,51 @@
             opacity: 1;
             transform: scaleX(1);
         }
+
+        .customer-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--white);
+            border: 2px solid var(--secondary-color);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+        }
+
+        .customer-suggestion {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .customer-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .customer-suggestion:hover, .customer-suggestion.highlighted {
+            background: var(--light-bg);
+            color: var(--secondary-color);
+        }
+
+        .customer-suggestion.highlighted {
+            background: var(--secondary-color);
+            color: var(--white);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-balance-scale"></i> Legal Task Manager</h1>
-            <p>Professional task management for legal professionals</p>
+            <p>Privacy-first task management for legal professionals 
+                <i class="fas fa-info-circle" onclick="showPrivacyInfo()" style="cursor: pointer; margin-left: 8px; opacity: 0.8;" title="Learn about our privacy protection"></i>
+            </p>
         </div>
 
         <div class="stats">
@@ -835,8 +947,10 @@
                     
                     <div class="form-group">
                         <label for="customerName">Customer/Client</label>
-                        <input type="text" id="customerName" class="form-control" placeholder="e.g., Mr. Johnson" list="customerSuggestions" onkeypress="handleEnterKey(event)">
-                        <datalist id="customerSuggestions"></datalist>
+                        <div style="position: relative;">
+                            <input type="text" id="customerName" class="form-control" placeholder="Type customer name..." onkeypress="handleEnterKey(event)" oninput="showCustomerSuggestions()" onblur="hideCustomerSuggestions()" onfocus="showCustomerSuggestions()">
+                            <div id="customerSuggestions" class="customer-suggestions" style="display: none;"></div>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -888,13 +1002,23 @@
 
             <div class="task-area">
                 <div class="tabs">
-                    <div class="tab active" onclick="switchTab('pending')">
-                        <i class="fas fa-clock"></i> Pending Tasks
-                        <span class="tab-badge" id="pendingBadge">0</span>
+                    <div class="tabs-container">
+                        <div class="tab active" onclick="switchTab('pending')">
+                            <i class="fas fa-clock"></i> Pending Tasks
+                            <span class="tab-badge" id="pendingBadge">0</span>
+                        </div>
+                        <div class="tab" onclick="switchTab('completed')">
+                            <i class="fas fa-check-circle"></i> Completed Tasks
+                            <span class="tab-badge" id="completedBadge">0</span>
+                        </div>
                     </div>
-                    <div class="tab" onclick="switchTab('completed')">
-                        <i class="fas fa-check-circle"></i> Completed Tasks
-                        <span class="tab-badge" id="completedBadge">0</span>
+                    <div class="tab-actions">
+                        <button class="tab-action-btn" onclick="exportTasksAsJSON()" title="Export tasks as JSON">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                        <button class="tab-action-btn" onclick="openSettings()" title="Settings">
+                            <i class="fas fa-cog"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -925,6 +1049,165 @@
         </div>
     </div>
 
+    <div class="task-info-modal" id="editTaskModal">
+        <div class="task-info-content" style="max-width: 500px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-edit"></i> Edit Task</h3>
+                <button class="task-info-close" onclick="closeEditTask()">&times;</button>
+            </div>
+            <div id="editTaskContent">
+                <div class="form-group">
+                    <label for="editTaskTitle">Task Title *</label>
+                    <input type="text" id="editTaskTitle" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editTaskDescription">Description</label>
+                    <textarea id="editTaskDescription" class="form-control" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editCustomerName">Customer/Client</label>
+                    <div style="position: relative;">
+                        <input type="text" id="editCustomerName" class="form-control" placeholder="Type customer name..." oninput="showEditCustomerSuggestions()" onblur="hideEditCustomerSuggestions()" onfocus="showEditCustomerSuggestions()">
+                        <div id="editCustomerSuggestions" class="customer-suggestions" style="display: none;"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Reminder</label>
+                    <div class="reminder-options" id="editReminderOptions">
+                        <button type="button" class="reminder-btn" onclick="setEditReminderOption('3h')">In 3 hours</button>
+                        <button type="button" class="reminder-btn" onclick="setEditReminderOption('1d')">In 1 day</button>
+                        <button type="button" class="reminder-btn" onclick="setEditReminderOption('custom')">Custom</button>
+                        <button type="button" class="reminder-btn" onclick="setEditReminderOption('none')">No reminder</button>
+                    </div>
+                    <div class="custom-datetime" id="editCustomDateTime">
+                        <input type="datetime-local" id="editReminderDateTime" class="form-control">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="saveTaskEdit()">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeEditTask()" style="background: #95a5a6;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="privacyInfoModal">
+        <div class="task-info-content" style="max-width: 500px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-shield-alt"></i> Your Privacy is Protected</h3>
+                <button class="task-info-close" onclick="closePrivacyInfo()">&times;</button>
+            </div>
+            <div id="privacyInfoContent">
+                <div class="task-info-item">
+                    <div class="task-info-label">100% Local Storage</div>
+                    <div class="task-info-value">All your tasks, client names, and data stay on your device. Nothing is ever sent to our servers.</div>
+                </div>
+                
+                <div class="task-info-item">
+                    <div class="task-info-label">No Data Collection</div>
+                    <div class="task-info-value">We don't track, analyze, or collect any of your information. Your work remains completely confidential.</div>
+                </div>
+                
+                <div class="task-info-item">
+                    <div class="task-info-label">Attorney-Client Privilege Safe</div>
+                    <div class="task-info-value">Designed with legal confidentiality in mind. Your sensitive client information never leaves your browser.</div>
+                </div>
+                
+                <div class="task-info-item">
+                    <div class="task-info-label">Works Offline</div>
+                    <div class="task-info-value">Full functionality without internet connection. Your data stays secure even when offline.</div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid var(--success-color);">
+                    <strong>Peace of Mind:</strong> This application is built privacy-first. Your legal work and client information remain under your complete control.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="settingsModal">
+        <div class="task-info-content" style="max-width: 450px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-cog"></i> Settings</h3>
+                <button class="task-info-close" onclick="closeSettings()">&times;</button>
+            </div>
+            <div id="settingsContent">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoExportEnabled" onchange="toggleAutoExport()"> 
+                        Enable automatic export
+                    </label>
+                    <p id="exportDescription" style="font-size: 0.9rem; color: var(--light-text); margin-top: 5px;">
+                        Automatically export tasks as JSON file every Friday
+                    </p>
+                </div>
+                
+                <div class="form-group" id="exportDayGroup">
+                    <label>Export days:</label>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay0" value="0" onchange="updateExportSettings()"> Sunday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay1" value="1" onchange="updateExportSettings()"> Monday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay2" value="2" onchange="updateExportSettings()"> Tuesday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay3" value="3" onchange="updateExportSettings()"> Wednesday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay4" value="4" onchange="updateExportSettings()"> Thursday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay5" value="5" onchange="updateExportSettings()"> Friday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay6" value="6" onchange="updateExportSettings()"> Saturday
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="exportTimeGroup">
+                    <label for="exportTime">Export time:</label>
+                    <input type="time" id="exportTime" class="form-control" value="16:00" onchange="updateExportSettings()">
+                </div>
+                
+                <div class="form-group">
+                    <label>Export Statistics:</label>
+                    <div style="background: var(--light-bg); padding: 15px; border-radius: 8px; margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span>Last export:</span>
+                            <span id="lastExportDate">Never</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Next scheduled:</span>
+                            <span id="nextExportDate">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="saveSettings()">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeSettings()" style="background: #95a5a6;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let tasks = [];
@@ -934,11 +1217,17 @@
         let searchTerm = '';
         let showCompleted = false;
         let selectedReminderOption = 'none';
+        let selectedEditReminderOption = 'none';
+        let currentEditingTaskId = null;
         let sortableInstance = null;
+        let autoExportEnabled = true;
+        let autoExportDays = [5]; // Friday by default
+        let autoExportTime = '16:00';
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             loadTasks();
+            loadSettings();
             updateStats();
             updateCustomerList();
             filterTasks();
@@ -950,6 +1239,10 @@
             
             // Set up periodic reminder checks
             setInterval(checkReminders, 60000); // Check every minute
+            
+            // Set up automatic Friday export
+            checkFridayExport();
+            setInterval(checkFridayExport, 60000 * 60); // Check every hour
             
             // Set up offline detection
             setupOfflineDetection();
@@ -997,7 +1290,7 @@
                 createdAt: new Date().toISOString(),
                 completedAt: null,
                 subTasks: subTasks,
-                order: tasks.length // Add order property for sorting
+                order: Date.now() // Use timestamp for order to ensure new tasks are on top
             };
 
             tasks.push(task);
@@ -1020,6 +1313,7 @@
             document.getElementById('taskDescription').value = '';
             document.getElementById('customerName').value = '';
             document.getElementById('reminderDateTime').value = '';
+            hideCustomerSuggestions();
             
             // Reset reminder options
             setReminderOption('none');
@@ -1164,6 +1458,23 @@
 
         function closeTaskInfo() {
             const modal = document.getElementById('taskInfoModal');
+            modal.classList.remove('show');
+        }
+
+        function showPrivacyInfo() {
+            const modal = document.getElementById('privacyInfoModal');
+            modal.classList.add('show');
+            
+            // Close modal when clicking outside
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    closePrivacyInfo();
+                }
+            };
+        }
+
+        function closePrivacyInfo() {
+            const modal = document.getElementById('privacyInfoModal');
             modal.classList.remove('show');
         }
 
@@ -1315,6 +1626,191 @@
             }
         }
 
+        function editTask(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            currentEditingTaskId = taskId;
+            
+            // Populate form fields
+            document.getElementById('editTaskTitle').value = task.title;
+            document.getElementById('editTaskDescription').value = task.description || '';
+            
+            // Set customer value
+            document.getElementById('editCustomerName').value = task.customer || '';
+            
+            // Set reminder option
+            if (!task.reminderDateTime) {
+                setEditReminderOption('none');
+            } else {
+                const reminderDate = new Date(task.reminderDateTime);
+                const now = new Date();
+                const diffHours = (reminderDate - now) / (1000 * 60 * 60);
+                const diffDays = (reminderDate - now) / (1000 * 60 * 60 * 24);
+                
+                if (Math.abs(diffHours - 3) < 0.5) {
+                    setEditReminderOption('3h');
+                } else if (Math.abs(diffDays - 1) < 0.1) {
+                    setEditReminderOption('1d');
+                } else {
+                    setEditReminderOption('custom');
+                    document.getElementById('editReminderDateTime').value = task.reminderDateTime.slice(0, 16);
+                }
+            }
+            
+            // Show modal
+            const modal = document.getElementById('editTaskModal');
+            modal.classList.add('show');
+            
+            // Focus on title field
+            setTimeout(() => {
+                document.getElementById('editTaskTitle').focus();
+            }, 300);
+            
+            // Close modal when clicking outside
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    closeEditTask();
+                }
+            };
+        }
+
+        function closeEditTask() {
+            const modal = document.getElementById('editTaskModal');
+            modal.classList.remove('show');
+            currentEditingTaskId = null;
+        }
+
+        function setEditReminderOption(option) {
+            selectedEditReminderOption = option;
+            
+            const reminderOptions = document.getElementById('editReminderOptions');
+            const customDateTime = document.getElementById('editCustomDateTime');
+            
+            // Update button states
+            reminderOptions.querySelectorAll('.reminder-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Find and activate the clicked button
+            const buttons = reminderOptions.querySelectorAll('.reminder-btn');
+            const options = ['3h', '1d', 'custom', 'none'];
+            const index = options.indexOf(option);
+            
+            if (index !== -1) {
+                buttons[index].classList.add('active');
+            }
+            
+            // Handle animations for custom option
+            if (option === 'custom') {
+                // Set current date and time as default if not already set
+                const currentValue = document.getElementById('editReminderDateTime').value;
+                if (!currentValue) {
+                    const now = new Date();
+                    const currentDateTime = now.toISOString().slice(0, 16);
+                    document.getElementById('editReminderDateTime').value = currentDateTime;
+                }
+                
+                customDateTime.classList.add('show');
+                setTimeout(() => {
+                    document.getElementById('editReminderDateTime').focus();
+                }, 200);
+            } else {
+                customDateTime.classList.remove('show');
+            }
+        }
+
+        function showEditCustomerSuggestions() {
+            const input = document.getElementById('editCustomerName');
+            const suggestionsDiv = document.getElementById('editCustomerSuggestions');
+            const inputValue = input.value.toLowerCase().trim();
+            
+            if (inputValue === '') {
+                // Show all customers when input is empty
+                const suggestions = [...customers].sort();
+                displayEditSuggestions(suggestions, suggestionsDiv);
+            } else {
+                // Filter customers based on input
+                const filteredCustomers = [...customers]
+                    .filter(customer => customer.toLowerCase().includes(inputValue))
+                    .sort();
+                displayEditSuggestions(filteredCustomers, suggestionsDiv);
+            }
+        }
+
+        function displayEditSuggestions(suggestions, suggestionsDiv) {
+            if (suggestions.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            suggestionsDiv.innerHTML = suggestions.map((customer, index) => 
+                `<div class="customer-suggestion" onclick="selectEditCustomerSuggestion('${escapeHtml(customer)}')" data-index="${index}">
+                    ${escapeHtml(customer)}
+                </div>`
+            ).join('');
+            
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function selectEditCustomerSuggestion(customer) {
+            document.getElementById('editCustomerName').value = customer;
+            hideEditCustomerSuggestions();
+        }
+
+        function hideEditCustomerSuggestions() {
+            setTimeout(() => {
+                document.getElementById('editCustomerSuggestions').style.display = 'none';
+            }, 150);
+        }
+
+        function saveTaskEdit() {
+            const title = document.getElementById('editTaskTitle').value.trim();
+            if (!title) {
+                showNotification('Please enter a task title', 'error');
+                return;
+            }
+
+            const task = tasks.find(t => t.id === currentEditingTaskId);
+            if (!task) return;
+
+            const description = document.getElementById('editTaskDescription').value.trim();
+            const customer = document.getElementById('editCustomerName').value.trim();
+            
+            let reminderDateTime = '';
+            if (selectedEditReminderOption === 'custom') {
+                reminderDateTime = document.getElementById('editReminderDateTime').value;
+            } else if (selectedEditReminderOption === '3h') {
+                const now = new Date();
+                now.setHours(now.getHours() + 3);
+                reminderDateTime = now.toISOString().slice(0, 16);
+            } else if (selectedEditReminderOption === '1d') {
+                const now = new Date();
+                now.setDate(now.getDate() + 1);
+                reminderDateTime = now.toISOString().slice(0, 16);
+            }
+
+            // Update task
+            task.title = title;
+            task.description = description;
+            task.customer = customer;
+            task.reminderDateTime = reminderDateTime;
+            
+            // Parse sub-tasks from updated description
+            task.subTasks = parseSubTasks(description);
+            
+            if (customer) customers.add(customer);
+            
+            saveTasks();
+            updateStats();
+            updateCustomerList();
+            updateCustomerSuggestions();
+            filterTasks();
+            
+            closeEditTask();
+            showNotification('Task updated successfully!', 'success');
+        }
+
         // Filter and display functions
         function filterTasksWithoutAnimation() {
             searchTerm = document.getElementById('searchTasks').value.toLowerCase();
@@ -1379,13 +1875,15 @@
                 existingTaskIds.add(element.getAttribute('data-task-id'));
             });
 
-            // Sort tasks by order property for pending, or by completion date for completed
+            // Sort tasks by order property for pending (newest on top), or by completion date for completed
             const sortedTasks = tasksToShow.sort((a, b) => {
                 if (currentTab === 'pending') {
-                    // Use order property for drag-and-drop sorting
-                    return (a.order || 0) - (b.order || 0);
+                    // Sort by creation date (newest first) then by order for drag-and-drop
+                    const aOrder = a.order !== undefined ? a.order : new Date(a.createdAt).getTime();
+                    const bOrder = b.order !== undefined ? b.order : new Date(b.createdAt).getTime();
+                    return bOrder - aOrder; // Reverse order for newest on top
                 } else {
-                    // Sort completed tasks by completion date
+                    // Sort completed tasks by completion date (newest first)
                     return new Date(b.completedAt) - new Date(a.completedAt);
                 }
             });
@@ -1402,12 +1900,6 @@
 
         function createTaskHTML(task, skipAnimation = false) {
             const isOverdue = task.reminderDateTime && new Date(task.reminderDateTime) < new Date() && !task.completed;
-            const reminderText = task.reminderDateTime ? 
-                `<div class="task-reminder ${isOverdue ? 'overdue' : ''}">
-                    <i class="fas fa-${isOverdue ? 'exclamation-triangle' : 'clock'}"></i>
-                    ${formatDateTime(task.reminderDateTime)}
-                    ${isOverdue ? ' (OVERDUE)' : ''}
-                </div>` : '';
 
             // Create sub-tasks HTML
             let subTasksHTML = '';
@@ -1449,6 +1941,9 @@
                         <button class="task-control-btn" onclick="showTaskInfo('${task.id}')" title="Task Information">
                             <i class="fas fa-info-circle"></i>
                         </button>
+                        <button class="task-control-btn" onclick="editTask('${task.id}')" title="Edit Task">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button class="task-control-btn delete" onclick="deleteTask('${task.id}')" title="Delete Task">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -1466,18 +1961,25 @@
                     
                     <div class="task-meta">
                         ${task.completedAt ? `<div><i class="fas fa-check"></i> Completed: ${formatDateTime(task.completedAt)}</div>` : ''}
-                        ${reminderText}
                     </div>
                     
                     <div class="task-actions">
-                        ${!task.completed ? 
-                            `<button class="btn btn-success btn-sm" onclick="completeTask('${task.id}')">
-                                <i class="fas fa-check"></i> Complete
-                            </button>` :
-                            `<button class="btn btn-primary btn-sm" onclick="uncompleteTask('${task.id}')">
-                                <i class="fas fa-undo"></i> Undo
-                            </button>`
-                        }
+                        <div class="task-action-buttons">
+                            ${!task.completed ? 
+                                `<button class="btn btn-success btn-sm" onclick="completeTask('${task.id}')">
+                                    <i class="fas fa-check"></i> Complete
+                                </button>` :
+                                `<button class="btn btn-primary btn-sm" onclick="uncompleteTask('${task.id}')">
+                                    <i class="fas fa-undo"></i> Undo
+                                </button>`
+                            }
+                        </div>
+                        ${task.reminderDateTime ? `
+                            <div class="task-deadline ${new Date(task.reminderDateTime) < new Date() && !task.completed ? 'overdue' : ''}">
+                                <i class="fas fa-${new Date(task.reminderDateTime) < new Date() && !task.completed ? 'exclamation-triangle' : 'clock'}"></i>
+                                ${formatDateTime(task.reminderDateTime)}
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -1493,7 +1995,7 @@
                 dragClass: 'sortable-drag',
                 animation: 150,
                 easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                filter: '.task-controls, .task-controls *, .sub-task-checkbox, .btn, .btn *',
+                filter: '.task-controls, .task-controls *, .sub-task-checkbox, .btn, .btn *, .task-title, .task-description, .task-customer, .sub-task-text, .task-deadline',
                 preventOnFilter: false,
                 onEnd: function(evt) {
                     // Update task order based on new positions
@@ -1579,14 +2081,105 @@
                 });
         }
 
+        let selectedSuggestionIndex = -1;
+
         function updateCustomerSuggestions() {
-            const datalist = document.getElementById('customerSuggestions');
-            datalist.innerHTML = '';
+            // This function is kept for compatibility but now does nothing
+            // as we use the new autocomplete approach
+        }
+
+        function showCustomerSuggestions() {
+            const input = document.getElementById('customerName');
+            const suggestionsDiv = document.getElementById('customerSuggestions');
+            const inputValue = input.value.toLowerCase().trim();
             
-            customers.forEach(customer => {
-                const option = document.createElement('option');
-                option.value = customer;
-                datalist.appendChild(option);
+            if (inputValue === '') {
+                // Show all customers when input is empty
+                const suggestions = [...customers].sort();
+                displaySuggestions(suggestions, suggestionsDiv);
+            } else {
+                // Filter customers based on input
+                const filteredCustomers = [...customers]
+                    .filter(customer => customer.toLowerCase().includes(inputValue))
+                    .sort();
+                displaySuggestions(filteredCustomers, suggestionsDiv);
+            }
+        }
+
+        function displaySuggestions(suggestions, suggestionsDiv) {
+            selectedSuggestionIndex = -1;
+            
+            if (suggestions.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            suggestionsDiv.innerHTML = suggestions.map((customer, index) => 
+                `<div class="customer-suggestion" onclick="selectCustomerSuggestion('${escapeHtml(customer)}')" data-index="${index}">
+                    ${escapeHtml(customer)}
+                </div>`
+            ).join('');
+            
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function selectCustomerSuggestion(customer) {
+            document.getElementById('customerName').value = customer;
+            hideCustomerSuggestions();
+        }
+
+        function hideCustomerSuggestions() {
+            setTimeout(() => {
+                document.getElementById('customerSuggestions').style.display = 'none';
+            }, 150); // Small delay to allow click events to register
+        }
+
+        // Enhanced enter key handling for customer autocomplete
+        function handleEnterKey(event) {
+            if (event.target.id === 'customerName') {
+                const suggestionsDiv = document.getElementById('customerSuggestions');
+                const suggestions = suggestionsDiv.querySelectorAll('.customer-suggestion');
+                
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+                    updateSuggestionHighlight(suggestions);
+                    return;
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+                    updateSuggestionHighlight(suggestions);
+                    return;
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (selectedSuggestionIndex >= 0 && suggestions[selectedSuggestionIndex]) {
+                        const selectedCustomer = suggestions[selectedSuggestionIndex].textContent.trim();
+                        selectCustomerSuggestion(selectedCustomer);
+                    } else {
+                        // Just hide suggestions and proceed with current value
+                        hideCustomerSuggestions();
+                        addTask();
+                    }
+                    return;
+                } else if (event.key === 'Escape') {
+                    hideCustomerSuggestions();
+                    return;
+                }
+            }
+            
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                addTask();
+            }
+        }
+
+        function updateSuggestionHighlight(suggestions) {
+            suggestions.forEach((suggestion, index) => {
+                if (index === selectedSuggestionIndex) {
+                    suggestion.classList.add('highlighted');
+                } else {
+                    suggestion.classList.remove('highlighted');
+                }
             });
         }
 
@@ -1673,6 +2266,259 @@
             updateOnlineStatus();
         }
 
+        // Export functionality
+        function checkFridayExport() {
+            if (!autoExportEnabled || autoExportDays.length === 0) return;
+            
+            const now = new Date();
+            const today = now.getDay();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            const [exportHours, exportMinutes] = autoExportTime.split(':').map(Number);
+            const exportTimeMinutes = exportHours * 60 + exportMinutes;
+            
+            // Check if today is an export day and we're past the export time
+            if (autoExportDays.includes(today) && currentTime >= exportTimeMinutes) {
+                const lastExportKey = 'lastAutoExport';
+                const lastExport = localStorage.getItem(lastExportKey);
+                const today_string = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+                
+                // Check if we haven't exported today yet
+                if (!lastExport || !lastExport.startsWith(today_string)) {
+                    // Trigger automatic export
+                    exportTasksAsJSON(true);
+                    localStorage.setItem(lastExportKey, now.toISOString());
+                }
+            }
+        }
+        
+        function getWeekNumber(date) {
+            const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+            const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+            return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        }
+        
+        function exportTasksAsJSON(isAutomatic = false) {
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                exportType: isAutomatic ? 'automatic' : 'manual',
+                tasks: tasks,
+                customers: [...customers],
+                stats: {
+                    total: tasks.length,
+                    pending: tasks.filter(t => !t.completed).length,
+                    completed: tasks.filter(t => t.completed).length,
+                    overdue: tasks.filter(t => 
+                        t.reminderDateTime && 
+                        new Date(t.reminderDateTime) < new Date() && 
+                        !t.completed
+                    ).length
+                }
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `legal-tasks-${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            const message = isAutomatic ? 
+                'Automatic Friday export completed!' : 
+                'Tasks exported successfully!';
+            showNotification(message, 'success');
+        }
+
+        // Settings functionality
+        function openSettings() {
+            loadSettings();
+            updateSettingsDisplay();
+            
+            const modal = document.getElementById('settingsModal');
+            modal.classList.add('show');
+            
+            // Close modal when clicking outside
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    closeSettings();
+                }
+            };
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('show');
+        }
+
+        function loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('legalTasksSettings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    autoExportEnabled = settings.autoExportEnabled !== undefined ? settings.autoExportEnabled : true;
+                    autoExportDays = settings.autoExportDays !== undefined ? settings.autoExportDays : [5];
+                    autoExportTime = settings.autoExportTime !== undefined ? settings.autoExportTime : '16:00';
+                    
+                    // Handle legacy single day setting
+                    if (settings.autoExportDay !== undefined && !settings.autoExportDays) {
+                        autoExportDays = [settings.autoExportDay];
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        function saveSettingsToStorage() {
+            try {
+                const settings = {
+                    autoExportEnabled,
+                    autoExportDays,
+                    autoExportTime
+                };
+                localStorage.setItem('legalTasksSettings', JSON.stringify(settings));
+            } catch (error) {
+                console.error('Error saving settings:', error);
+            }
+        }
+
+        function updateSettingsDisplay() {
+            document.getElementById('autoExportEnabled').checked = autoExportEnabled;
+            document.getElementById('exportTime').value = autoExportTime;
+            
+            // Update day checkboxes
+            for (let i = 0; i <= 6; i++) {
+                const checkbox = document.getElementById(`exportDay${i}`);
+                if (checkbox) {
+                    checkbox.checked = autoExportDays.includes(i);
+                }
+            }
+            
+            // Update export day and time group visibility
+            const exportDayGroup = document.getElementById('exportDayGroup');
+            const exportTimeGroup = document.getElementById('exportTimeGroup');
+            exportDayGroup.style.display = autoExportEnabled ? 'block' : 'none';
+            exportTimeGroup.style.display = autoExportEnabled ? 'block' : 'none';
+            
+            // Update description
+            updateExportDescription();
+            
+            // Update export statistics
+            updateExportStatistics();
+        }
+
+        function updateExportStatistics() {
+            const lastExport = localStorage.getItem('lastAutoExport');
+            const lastExportElement = document.getElementById('lastExportDate');
+            const nextExportElement = document.getElementById('nextExportDate');
+            
+            if (lastExport) {
+                lastExportElement.textContent = formatDateTime(lastExport);
+            } else {
+                lastExportElement.textContent = 'Never';
+            }
+            
+            if (autoExportEnabled) {
+                const nextExport = getNextExportDate();
+                nextExportElement.textContent = nextExport.toLocaleDateString();
+            } else {
+                nextExportElement.textContent = 'Disabled';
+            }
+        }
+
+        function updateExportDescription() {
+            const descElement = document.getElementById('exportDescription');
+            if (!autoExportEnabled || autoExportDays.length === 0) {
+                descElement.textContent = 'Automatic export is disabled';
+                return;
+            }
+            
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const selectedDays = autoExportDays.map(day => dayNames[day]);
+            
+            let dayText = '';
+            if (selectedDays.length === 7) {
+                dayText = 'every day';
+            } else if (selectedDays.length === 1) {
+                dayText = `every ${selectedDays[0]}`;
+            } else if (selectedDays.length === 2) {
+                dayText = `every ${selectedDays.join(' and ')}`;
+            } else {
+                dayText = `every ${selectedDays.slice(0, -1).join(', ')} and ${selectedDays[selectedDays.length - 1]}`;
+            }
+            
+            descElement.textContent = `Automatically export tasks as JSON file ${dayText} at ${autoExportTime}`;
+        }
+
+        function getNextExportDate() {
+            if (!autoExportEnabled || autoExportDays.length === 0) {
+                return null;
+            }
+            
+            const now = new Date();
+            const currentDay = now.getDay();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            const [exportHours, exportMinutes] = autoExportTime.split(':').map(Number);
+            const exportTimeMinutes = exportHours * 60 + exportMinutes;
+            
+            // Find the next export day
+            let nextExportDay = null;
+            let daysToAdd = 0;
+            
+            // Check if today is an export day and time hasn't passed
+            if (autoExportDays.includes(currentDay) && currentTime < exportTimeMinutes) {
+                nextExportDay = currentDay;
+                daysToAdd = 0;
+            } else {
+                // Find next export day
+                for (let i = 1; i <= 7; i++) {
+                    const checkDay = (currentDay + i) % 7;
+                    if (autoExportDays.includes(checkDay)) {
+                        nextExportDay = checkDay;
+                        daysToAdd = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (nextExportDay === null) return null;
+            
+            const nextExport = new Date(now);
+            nextExport.setDate(now.getDate() + daysToAdd);
+            nextExport.setHours(exportHours, exportMinutes, 0, 0);
+            
+            return nextExport;
+        }
+
+        function toggleAutoExport() {
+            autoExportEnabled = document.getElementById('autoExportEnabled').checked;
+            updateSettingsDisplay();
+        }
+
+        function updateExportSettings() {
+            // Get selected days
+            autoExportDays = [];
+            for (let i = 0; i <= 6; i++) {
+                const checkbox = document.getElementById(`exportDay${i}`);
+                if (checkbox && checkbox.checked) {
+                    autoExportDays.push(i);
+                }
+            }
+            
+            // Get time
+            autoExportTime = document.getElementById('exportTime').value;
+            
+            updateSettingsDisplay();
+        }
+
+        function saveSettings() {
+            saveSettingsToStorage();
+            closeSettings();
+            showNotification('Settings saved successfully!', 'success');
+        }
+
         // Data persistence
         function saveTasks() {
             try {
@@ -1734,6 +2580,9 @@
             // Close modal with Escape key
             if (e.key === 'Escape') {
                 closeTaskInfo();
+                closeEditTask();
+                closeSettings();
+                closePrivacyInfo();
                 return;
             }
             
