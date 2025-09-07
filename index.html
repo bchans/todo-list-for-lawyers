@@ -1013,9 +1013,6 @@
                         </div>
                     </div>
                     <div class="tab-actions">
-                        <button class="tab-action-btn" onclick="exportTasksAsJSON()" title="Export tasks as JSON">
-                            <i class="fas fa-upload"></i>
-                        </button>
                         <button class="tab-action-btn" onclick="openSettings()" title="Settings">
                             <i class="fas fa-cog"></i>
                         </button>
@@ -1154,9 +1151,6 @@
                     <label>Export days:</label>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;">
                         <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="exportDay0" value="0" onchange="updateExportSettings()"> Sunday
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px;">
                             <input type="checkbox" id="exportDay1" value="1" onchange="updateExportSettings()"> Monday
                         </label>
                         <label style="display: flex; align-items: center; gap: 8px;">
@@ -1173,6 +1167,9 @@
                         </label>
                         <label style="display: flex; align-items: center; gap: 8px;">
                             <input type="checkbox" id="exportDay6" value="6" onchange="updateExportSettings()"> Saturday
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportDay0" value="0" onchange="updateExportSettings()"> Sunday
                         </label>
                     </div>
                 </div>
@@ -1196,12 +1193,62 @@
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <div class="form-group">
+                    <label>Manual Export/Import:</label>
+                    <div style="display: flex; gap: 10px; margin-top: 8px;">
+                        <button type="button" class="reminder-btn" onclick="exportTasksAsJSON()" style="flex: 1;">
+                            <i class="fas fa-upload"></i> Export Tasks
+                        </button>
+                        <button type="button" class="reminder-btn" onclick="importTasks()" style="flex: 1;">
+                            <i class="fas fa-download"></i> Import Tasks
+                        </button>
+                    </div>
+                    <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+                </div>
+                
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+                
+                <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" onclick="saveSettings()">
                         <i class="fas fa-save"></i> Save Settings
                     </button>
                     <button class="btn btn-secondary" onclick="closeSettings()" style="background: #95a5a6;">
                         <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="importConfirmModal">
+        <div class="task-info-content" style="max-width: 500px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-download"></i> Confirm Import</h3>
+                <button class="task-info-close" onclick="closeImportConfirm()">&times;</button>
+            </div>
+            <div id="importConfirmContent">
+                <div style="margin-bottom: 20px;">
+                    <div style="background: var(--light-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: var(--primary-color);">
+                            <i class="fas fa-file-import"></i> Import Details
+                        </div>
+                        <div id="importSummary" style="line-height: 1.6;"></div>
+                    </div>
+                    
+                    <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #27ae60;">
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #27ae60;">
+                            <i class="fas fa-shield-alt"></i> Your Data is Safe
+                        </div>
+                        <div style="color: #2c5530; font-size: 0.9rem;" id="importSafetyMessage"></div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="closeImportConfirm()" style="background: #95a5a6;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button class="btn btn-primary" onclick="confirmImport()" style="background: #27ae60;">
+                        <i class="fas fa-check"></i> Import Tasks
                     </button>
                 </div>
             </div>
@@ -1223,6 +1270,8 @@
         let autoExportEnabled = true;
         let autoExportDays = [5]; // Friday by default
         let autoExportTime = '16:00';
+        let autoExportInterval = null;
+        let autoExportTimeout = null;
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
@@ -1240,9 +1289,8 @@
             // Set up periodic reminder checks
             setInterval(checkReminders, 60000); // Check every minute
             
-            // Set up automatic Friday export
-            checkFridayExport();
-            setInterval(checkFridayExport, 60000 * 60); // Check every hour
+            // Set up automatic export with smart scheduling
+            setupSmartExportScheduling();
             
             // Set up offline detection
             setupOfflineDetection();
@@ -1289,8 +1337,7 @@
                 completed: false,
                 createdAt: new Date().toISOString(),
                 completedAt: null,
-                subTasks: subTasks,
-                order: Date.now() // Use timestamp for order to ensure new tasks are on top
+                subTasks: subTasks
             };
 
             tasks.push(task);
@@ -1626,6 +1673,29 @@
             }
         }
 
+        function moveTaskToTop(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task || task.completed) return;
+            
+            // Get all pending tasks for current filter
+            const filteredTasks = getFilteredTasks().filter(t => !t.completed);
+            
+            // Assign custom order to all tasks, with the selected task at position 0
+            filteredTasks.forEach((t, index) => {
+                if (t.id === taskId) {
+                    t.customOrder = 0;
+                } else {
+                    // Shift other tasks down
+                    const currentOrder = t.customOrder !== undefined ? t.customOrder : index;
+                    t.customOrder = currentOrder >= 0 ? currentOrder + 1 : index + 1;
+                }
+            });
+            
+            saveTasks();
+            filterTasks();
+            showNotification('Task moved to top', 'success');
+        }
+
         function editTask(taskId) {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
@@ -1812,11 +1882,10 @@
         }
 
         // Filter and display functions
-        function filterTasksWithoutAnimation() {
-            searchTerm = document.getElementById('searchTasks').value.toLowerCase();
-            showCompleted = document.getElementById('showCompleted').checked;
+        function getFilteredTasks() {
+            const searchTerm = document.getElementById('searchTasks').value.toLowerCase();
             
-            const filteredTasks = tasks.filter(task => {
+            return tasks.filter(task => {
                 const matchesSearch = task.title.toLowerCase().includes(searchTerm) || 
                                     (task.description && task.description.toLowerCase().includes(searchTerm)) ||
                                     (task.customer && task.customer.toLowerCase().includes(searchTerm));
@@ -1826,7 +1895,13 @@
                 
                 return matchesSearch && matchesCustomer && matchesTab;
             });
+        }
 
+        function filterTasksWithoutAnimation() {
+            searchTerm = document.getElementById('searchTasks').value.toLowerCase();
+            showCompleted = document.getElementById('showCompleted').checked;
+            
+            const filteredTasks = getFilteredTasks();
             displayTasks(filteredTasks, true); // Skip animations
         }
 
@@ -1834,17 +1909,7 @@
             searchTerm = document.getElementById('searchTasks').value.toLowerCase();
             showCompleted = document.getElementById('showCompleted').checked;
             
-            const filteredTasks = tasks.filter(task => {
-                const matchesSearch = task.title.toLowerCase().includes(searchTerm) || 
-                                    (task.description && task.description.toLowerCase().includes(searchTerm)) ||
-                                    (task.customer && task.customer.toLowerCase().includes(searchTerm));
-                const matchesCustomer = !selectedCustomer || task.customer === selectedCustomer;
-                const matchesTab = currentTab === 'pending' ? !task.completed : task.completed;
-                const matchesCompletedFilter = currentTab === 'pending' || showCompleted || task.completed;
-                
-                return matchesSearch && matchesCustomer && matchesTab;
-            });
-
+            const filteredTasks = getFilteredTasks();
             displayTasks(filteredTasks);
         }
 
@@ -1875,13 +1940,43 @@
                 existingTaskIds.add(element.getAttribute('data-task-id'));
             });
 
-            // Sort tasks by order property for pending (newest on top), or by completion date for completed
+            // Sort tasks based on new ordering system
             const sortedTasks = tasksToShow.sort((a, b) => {
                 if (currentTab === 'pending') {
-                    // Sort by creation date (newest first) then by order for drag-and-drop
-                    const aOrder = a.order !== undefined ? a.order : new Date(a.createdAt).getTime();
-                    const bOrder = b.order !== undefined ? b.order : new Date(b.createdAt).getTime();
-                    return bOrder - aOrder; // Reverse order for newest on top
+                    // If user has manually ordered tasks, respect that order
+                    if (a.customOrder !== undefined && b.customOrder !== undefined) {
+                        return a.customOrder - b.customOrder;
+                    }
+                    
+                    // If only one has custom order, prioritize it
+                    if (a.customOrder !== undefined && b.customOrder === undefined) {
+                        return -1;
+                    }
+                    if (b.customOrder !== undefined && a.customOrder === undefined) {
+                        return 1;
+                    }
+                    
+                    // Default sorting: tasks with reminder dates first (closest first), then tasks without reminders by creation date
+                    const aHasReminder = a.reminderDateTime && !a.completed;
+                    const bHasReminder = b.reminderDateTime && !b.completed;
+                    
+                    if (aHasReminder && bHasReminder) {
+                        // Both have reminders - sort by reminder date (closest first)
+                        return new Date(a.reminderDateTime) - new Date(b.reminderDateTime);
+                    }
+                    
+                    if (aHasReminder && !bHasReminder) {
+                        // A has reminder, B doesn't - A comes first
+                        return -1;
+                    }
+                    
+                    if (!aHasReminder && bHasReminder) {
+                        // B has reminder, A doesn't - B comes first
+                        return 1;
+                    }
+                    
+                    // Neither has reminder - sort by creation date (newest first)
+                    return new Date(b.createdAt) - new Date(a.createdAt);
                 } else {
                     // Sort completed tasks by completion date (newest first)
                     return new Date(b.completedAt) - new Date(a.completedAt);
@@ -1938,6 +2033,9 @@
             return `
                 <div class="task-item ${task.completed ? 'completed' : ''} ${skipAnimation ? '' : 'fade-in'}" data-task-id="${task.id}">
                     <div class="task-controls">
+                        <button class="task-control-btn" onclick="moveTaskToTop('${task.id}')" title="Move to Top">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
                         <button class="task-control-btn" onclick="showTaskInfo('${task.id}')" title="Task Information">
                             <i class="fas fa-info-circle"></i>
                         </button>
@@ -1998,15 +2096,15 @@
                 filter: '.task-controls, .task-controls *, .sub-task-checkbox, .btn, .btn *, .task-title, .task-description, .task-customer, .sub-task-text, .task-deadline',
                 preventOnFilter: false,
                 onEnd: function(evt) {
-                    // Update task order based on new positions
+                    // Update task custom order based on new positions
                     const taskElements = taskList.querySelectorAll('[data-task-id]');
                     const reorderedIds = Array.from(taskElements).map(el => el.getAttribute('data-task-id'));
                     
-                    // Update order property for all visible tasks
+                    // Update customOrder property for all visible tasks
                     reorderedIds.forEach((taskId, index) => {
                         const task = tasks.find(t => t.id === taskId);
                         if (task) {
-                            task.order = index;
+                            task.customOrder = index;
                         }
                     });
                     
@@ -2249,6 +2347,122 @@
             }, 3000);
         }
 
+        function showExportNotification() {
+            // Check if notification already exists
+            const existingNotification = document.querySelector('.export-prompt');
+            if (existingNotification) {
+                console.log('Export notification already visible, skipping');
+                return;
+            }
+            
+            const notification = document.createElement('div');
+            notification.className = 'notification export-prompt';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 20px;
+                background: var(--secondary-color);
+                color: var(--white);
+                border-radius: 8px;
+                font-weight: 600;
+                z-index: 1000;
+                box-shadow: var(--shadow-hover);
+                max-width: 350px;
+                transform: translateX(400px);
+                transition: var(--transition);
+            `;
+            
+            notification.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <i class="fas fa-upload" style="margin-right: 8px;"></i>
+                    <strong>Scheduled Export Ready</strong>
+                </div>
+                <div style="margin-bottom: 15px; font-weight: normal; opacity: 0.9;">
+                    It's time for your automatic task export. Would you like to download your tasks now?
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="confirmExport(this)" style="
+                        background: var(--white);
+                        color: var(--secondary-color);
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        flex: 1;
+                    ">
+                        <i class="fas fa-download"></i> Export Now
+                    </button>
+                    <button onclick="dismissExport(this)" style="
+                        background: rgba(255,255,255,0.2);
+                        color: var(--white);
+                        border: 1px solid rgba(255,255,255,0.3);
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        flex: 1;
+                    ">
+                        <i class="fas fa-times"></i> Later
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Show notification
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 100);
+            
+            // Auto-dismiss after 30 seconds if no action
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    dismissExport(notification.querySelector('button[onclick*="dismissExport"]'));
+                }
+            }, 30000);
+        }
+
+        function confirmExport(button) {
+            const notification = button.closest('.export-prompt');
+            
+            // Trigger export
+            exportTasksAsJSON(true);
+            
+            // Mark as exported today
+            const now = new Date();
+            localStorage.setItem('lastAutoExport', now.toISOString());
+            
+            // Remove notification
+            notification.style.transform = 'translateX(400px)';
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }
+
+        function dismissExport(button) {
+            const notification = button.closest('.export-prompt');
+            
+            // Remove notification
+            notification.style.transform = 'translateX(400px)';
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+            
+            // Mark as dismissed for today to prevent repeated notifications
+            const now = new Date();
+            const today_string = now.toISOString().split('T')[0];
+            localStorage.setItem('lastExportDismissal', today_string);
+            
+            // Show brief message
+            showNotification('Export reminder dismissed. You can manually export anytime.', 'warning');
+        }
+
         // Offline functionality
         function setupOfflineDetection() {
             const offlineIndicator = document.getElementById('offlineIndicator');
@@ -2266,27 +2480,128 @@
             updateOnlineStatus();
         }
 
+        // Smart Export Scheduling
+        function setupSmartExportScheduling() {
+            console.log('Setting up smart export scheduling...');
+            
+            // Clear existing timers
+            clearSmartExportScheduling();
+            
+            if (!autoExportEnabled || autoExportDays.length === 0) {
+                console.log('Auto export disabled or no days configured');
+                return;
+            }
+            
+            // Schedule checks for each configured export time
+            scheduleNextExportCheck();
+            
+            // Also set up a backup check every 30 minutes to catch any missed schedules
+            autoExportInterval = setInterval(() => {
+                console.log('Backup export check...');
+                checkFridayExport();
+            }, 30 * 60 * 1000); // Every 30 minutes
+            
+            console.log('Smart scheduling setup complete');
+        }
+        
+        function clearSmartExportScheduling() {
+            if (autoExportTimeout) {
+                clearTimeout(autoExportTimeout);
+                autoExportTimeout = null;
+                console.log('Cleared export timeout');
+            }
+            
+            if (autoExportInterval) {
+                clearInterval(autoExportInterval);
+                autoExportInterval = null;
+                console.log('Cleared export interval');
+            }
+        }
+        
+        function scheduleNextExportCheck() {
+            const nextExport = getNextExportDate();
+            
+            if (!nextExport) {
+                console.log('No next export date found');
+                return;
+            }
+            
+            const now = new Date();
+            const msUntilExport = nextExport.getTime() - now.getTime();
+            
+            console.log('Next export scheduled for:', nextExport.toISOString());
+            console.log('Time until next export:', Math.round(msUntilExport / 1000 / 60), 'minutes');
+            
+            if (msUntilExport > 0) {
+                // Schedule the export check
+                autoExportTimeout = setTimeout(() => {
+                    console.log('Scheduled export check triggered!');
+                    checkFridayExport();
+                    
+                    // Schedule the next one after a delay
+                    setTimeout(() => {
+                        scheduleNextExportCheck();
+                    }, 5000); // Wait 5 seconds then schedule next
+                }, msUntilExport);
+                
+                console.log('Export timeout scheduled, ID:', autoExportTimeout);
+            } else if (msUntilExport > -60000) { // Only if less than 1 minute in the past
+                console.log('Next export time is in the past (but recent), checking now...');
+                checkFridayExport();
+                
+                // Schedule the next one after a longer delay to avoid loops
+                setTimeout(() => {
+                    scheduleNextExportCheck();
+                }, 10000); // Wait 10 seconds then schedule next
+            } else {
+                console.log('Next export time is too far in the past, skipping to next occurrence...');
+                // Skip this occurrence and find the next one
+                setTimeout(() => {
+                    scheduleNextExportCheck();
+                }, 1000);
+            }
+        }
+
         // Export functionality
         function checkFridayExport() {
-            if (!autoExportEnabled || autoExportDays.length === 0) return;
+            if (!autoExportEnabled || autoExportDays.length === 0) {
+                return;
+            }
             
             const now = new Date();
             const today = now.getDay();
             const currentTime = now.getHours() * 60 + now.getMinutes();
             const [exportHours, exportMinutes] = autoExportTime.split(':').map(Number);
             const exportTimeMinutes = exportHours * 60 + exportMinutes;
+            const today_string = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+            
+            console.log('Auto export check:', {
+                today: today,
+                currentTime: Math.floor(currentTime/60) + ':' + String(currentTime%60).padStart(2,'0'),
+                exportTime: exportHours + ':' + String(exportMinutes).padStart(2,'0'),
+                isExportDay: autoExportDays.includes(today),
+                isTimeReached: currentTime >= exportTimeMinutes
+            });
             
             // Check if today is an export day and we're past the export time
             if (autoExportDays.includes(today) && currentTime >= exportTimeMinutes) {
                 const lastExportKey = 'lastAutoExport';
                 const lastExport = localStorage.getItem(lastExportKey);
-                const today_string = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+                const lastDismissal = localStorage.getItem('lastExportDismissal');
                 
-                // Check if we haven't exported today yet
-                if (!lastExport || !lastExport.startsWith(today_string)) {
-                    // Trigger automatic export
-                    exportTasksAsJSON(true);
-                    localStorage.setItem(lastExportKey, now.toISOString());
+                // Check if we haven't exported today yet AND haven't dismissed today
+                const alreadyExported = lastExport && lastExport.startsWith(today_string);
+                const alreadyDismissed = lastDismissal && lastDismissal === today_string;
+                
+                if (!alreadyExported && !alreadyDismissed) {
+                    console.log('AUTO EXPORT: Triggering export notification');
+                    try {
+                        showExportNotification();
+                    } catch (error) {
+                        console.error('AUTO EXPORT: Error showing notification:', error);
+                    }
+                } else {
+                    console.log('AUTO EXPORT: Already handled today - exported:', alreadyExported, 'dismissed:', alreadyDismissed);
                 }
             }
         }
@@ -2298,37 +2613,237 @@
         }
         
         function exportTasksAsJSON(isAutomatic = false) {
-            const exportData = {
-                exportDate: new Date().toISOString(),
-                exportType: isAutomatic ? 'automatic' : 'manual',
-                tasks: tasks,
-                customers: [...customers],
-                stats: {
-                    total: tasks.length,
-                    pending: tasks.filter(t => !t.completed).length,
-                    completed: tasks.filter(t => t.completed).length,
-                    overdue: tasks.filter(t => 
-                        t.reminderDateTime && 
-                        new Date(t.reminderDateTime) < new Date() && 
-                        !t.completed
-                    ).length
+            try {
+                const exportData = {
+                    exportDate: new Date().toISOString(),
+                    exportType: isAutomatic ? 'automatic' : 'manual',
+                    tasks: tasks,
+                    customers: [...customers],
+                    stats: {
+                        total: tasks.length,
+                        pending: tasks.filter(t => !t.completed).length,
+                        completed: tasks.filter(t => t.completed).length,
+                        overdue: tasks.filter(t => 
+                            t.reminderDateTime && 
+                            new Date(t.reminderDateTime) < new Date() && 
+                            !t.completed
+                        ).length
+                    }
+                };
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = `legal-tasks-${new Date().toISOString().split('T')[0]}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                
+                // Track export for statistics
+                const now = new Date();
+                localStorage.setItem('lastExport', now.toISOString());
+                localStorage.setItem('lastExportType', isAutomatic ? 'automatic' : 'manual');
+                
+                console.log('Export download triggered:', exportFileDefaultName, `(${exportData.stats.total} tasks)`);
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Error during export', 'error');
+                throw error;
+            }
+        }
+
+        // Import functionality
+        function importTasks() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/json') {
+                showNotification('Please select a valid JSON file', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importData = JSON.parse(e.target.result);
+                    
+                    // Validate the import data structure
+                    if (!validateImportData(importData)) {
+                        showNotification('Invalid file format. Please select a valid task export file.', 'error');
+                        return;
+                    }
+
+                    // Show confirmation dialog with import details
+                    showImportConfirmation(importData);
+                    
+                } catch (error) {
+                    console.error('Import parsing error:', error);
+                    showNotification('Error reading file. Please ensure it\'s a valid JSON file.', 'error');
                 }
             };
             
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            reader.readAsText(file);
+            // Clear the input so the same file can be selected again
+            event.target.value = '';
+        }
+
+        function validateImportData(data) {
+            // Check if it has the expected structure
+            if (!data || typeof data !== 'object') return false;
+            if (!Array.isArray(data.tasks)) return false;
+            if (!Array.isArray(data.customers)) return false;
             
-            const exportFileDefaultName = `legal-tasks-${new Date().toISOString().split('T')[0]}.json`;
+            // Validate task structure
+            return data.tasks.every(task => 
+                task.id && 
+                task.title && 
+                typeof task.completed === 'boolean' &&
+                task.createdAt
+            );
+        }
+
+        // Global variable to store import data for the modal
+        let pendingImportData = null;
+
+        function showImportConfirmation(importData) {
+            const stats = importData.stats || {
+                total: importData.tasks.length,
+                pending: importData.tasks.filter(t => !t.completed).length,
+                completed: importData.tasks.filter(t => t.completed).length
+            };
             
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
+            const exportDate = importData.exportDate ? new Date(importData.exportDate).toLocaleDateString() : 'Unknown';
             
-            const message = isAutomatic ? 
-                'Automatic Friday export completed!' : 
-                'Tasks exported successfully!';
-            showNotification(message, 'success');
+            // Check for duplicate task IDs
+            const existingIds = new Set(tasks.map(t => t.id));
+            const duplicates = importData.tasks.filter(t => existingIds.has(t.id));
+            const newTasks = importData.tasks.filter(t => !existingIds.has(t.id));
+            
+            // Store import data for when user confirms
+            pendingImportData = importData;
+            
+            // Build the summary HTML
+            let summaryHTML = `
+                <div style="margin-bottom: 12px;">
+                    <strong>📅 Export Date:</strong> ${exportDate}
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 15px;">
+                    <div style="text-align: center; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 6px;">
+                        <div style="font-size: 1.2em; font-weight: 600; color: #3498db;">${stats.pending}</div>
+                        <div style="font-size: 0.9em; color: var(--light-text);">Pending Tasks</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: rgba(39, 174, 96, 0.1); border-radius: 6px;">
+                        <div style="font-size: 1.2em; font-weight: 600; color: #27ae60;">${stats.completed}</div>
+                        <div style="font-size: 0.9em; color: var(--light-text);">Completed Tasks</div>
+                    </div>
+                </div>
+                <div style="text-align: center; padding: 8px; background: rgba(155, 89, 182, 0.1); border-radius: 6px;">
+                    <span style="font-weight: 600; color: #9b59b6;">${importData.customers.length}</span> customers
+                </div>
+            `;
+            
+            // Build safety message
+            let safetyMessage = '';
+            if (duplicates.length > 0) {
+                safetyMessage = `${duplicates.length} existing tasks will be updated with new data, and ${newTasks.length} completely new tasks will be added to your collection.`;
+            } else {
+                safetyMessage = `All ${stats.total} tasks are new and will be added to your existing collection. None of your current tasks will be modified.`;
+            }
+            
+            // Update modal content
+            document.getElementById('importSummary').innerHTML = summaryHTML;
+            document.getElementById('importSafetyMessage').textContent = safetyMessage;
+            
+            // Show the modal
+            const modal = document.getElementById('importConfirmModal');
+            modal.classList.add('show');
+            
+            // Close modal when clicking outside
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    closeImportConfirm();
+                }
+            };
+        }
+
+        function closeImportConfirm() {
+            const modal = document.getElementById('importConfirmModal');
+            modal.classList.remove('show');
+            pendingImportData = null;
+        }
+
+        function confirmImport() {
+            if (pendingImportData) {
+                closeImportConfirm();
+                performImport(pendingImportData);
+            }
+        }
+
+        function performImport(importData) {
+            try {
+                // Merge tasks instead of replacing
+                const existingIds = new Set(tasks.map(t => t.id));
+                let updatedCount = 0;
+                let addedCount = 0;
+                
+                importData.tasks.forEach(importTask => {
+                    // Ensure backward compatibility for any missing properties
+                    if (!importTask.subTasks) {
+                        importTask.subTasks = parseSubTasks(importTask.description || '');
+                    }
+                    
+                    if (existingIds.has(importTask.id)) {
+                        // Update existing task
+                        const index = tasks.findIndex(t => t.id === importTask.id);
+                        if (index !== -1) {
+                            tasks[index] = importTask;
+                            updatedCount++;
+                        }
+                    } else {
+                        // Add new task
+                        tasks.push(importTask);
+                        addedCount++;
+                    }
+                });
+                
+                // Merge customers (add new ones, keep existing)
+                importData.customers.forEach(customer => {
+                    customers.add(customer);
+                });
+                
+                // Save merged data
+                saveTasks();
+                
+                // Update UI
+                updateStats();
+                updateCustomerList();
+                updateCustomerSuggestions();
+                filterTasks();
+                
+                // Close settings modal
+                closeSettings();
+                
+                const totalImported = updatedCount + addedCount;
+                let message = `Successfully imported ${totalImported} tasks!`;
+                if (updatedCount > 0 && addedCount > 0) {
+                    message += ` (${addedCount} new, ${updatedCount} updated)`;
+                } else if (updatedCount > 0) {
+                    message += ` (${updatedCount} updated)`;
+                } else {
+                    message += ` (${addedCount} new)`;
+                }
+                
+                showNotification(message, 'success');
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                showNotification('Error importing tasks. Please try again.', 'error');
+            }
         }
 
         // Settings functionality
@@ -2355,6 +2870,7 @@
         function loadSettings() {
             try {
                 const savedSettings = localStorage.getItem('legalTasksSettings');
+                
                 if (savedSettings) {
                     const settings = JSON.parse(savedSettings);
                     autoExportEnabled = settings.autoExportEnabled !== undefined ? settings.autoExportEnabled : true;
@@ -2365,6 +2881,12 @@
                     if (settings.autoExportDay !== undefined && !settings.autoExportDays) {
                         autoExportDays = [settings.autoExportDay];
                     }
+                    
+                    console.log('Settings loaded:', {
+                        autoExportEnabled,
+                        autoExportDays,
+                        autoExportTime
+                    });
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -2410,12 +2932,14 @@
         }
 
         function updateExportStatistics() {
-            const lastExport = localStorage.getItem('lastAutoExport');
+            const lastExport = localStorage.getItem('lastExport');
+            const lastExportType = localStorage.getItem('lastExportType');
             const lastExportElement = document.getElementById('lastExportDate');
             const nextExportElement = document.getElementById('nextExportDate');
             
             if (lastExport) {
-                lastExportElement.textContent = formatDateTime(lastExport);
+                const typeText = lastExportType ? ` (${lastExportType})` : '';
+                lastExportElement.textContent = formatDateTime(lastExport) + typeText;
             } else {
                 lastExportElement.textContent = 'Never';
             }
@@ -2463,12 +2987,20 @@
             const [exportHours, exportMinutes] = autoExportTime.split(':').map(Number);
             const exportTimeMinutes = exportHours * 60 + exportMinutes;
             
+            
             // Find the next export day
             let nextExportDay = null;
             let daysToAdd = 0;
             
-            // Check if today is an export day and time hasn't passed
-            if (autoExportDays.includes(currentDay) && currentTime < exportTimeMinutes) {
+            // Check if today is an export day and time hasn't passed (with 1 minute buffer)
+            // Also check if we haven't already handled the export today
+            const today_string = now.toISOString().split('T')[0];
+            const lastExport = localStorage.getItem('lastAutoExport');
+            const lastDismissal = localStorage.getItem('lastExportDismissal');
+            const alreadyHandledToday = (lastExport && lastExport.startsWith(today_string)) || 
+                                       (lastDismissal && lastDismissal === today_string);
+            
+            if (autoExportDays.includes(currentDay) && currentTime < (exportTimeMinutes + 1) && !alreadyHandledToday) {
                 nextExportDay = currentDay;
                 daysToAdd = 0;
             } else {
@@ -2483,7 +3015,9 @@
                 }
             }
             
-            if (nextExportDay === null) return null;
+            if (nextExportDay === null) {
+                return null;
+            }
             
             const nextExport = new Date(now);
             nextExport.setDate(now.getDate() + daysToAdd);
@@ -2515,6 +3049,11 @@
 
         function saveSettings() {
             saveSettingsToStorage();
+            
+            // Re-setup smart scheduling with new settings
+            console.log('Re-setting up smart scheduling after settings change...');
+            setupSmartExportScheduling();
+            
             closeSettings();
             showNotification('Settings saved successfully!', 'success');
         }
@@ -2538,13 +3077,10 @@
                 if (savedTasks) {
                     tasks = JSON.parse(savedTasks);
                     
-                    // Handle backward compatibility and update existing tasks with sub-tasks and order
+                    // Handle backward compatibility and update existing tasks with sub-tasks
                     tasks.forEach((task, index) => {
                         if (!task.subTasks) {
                             task.subTasks = parseSubTasks(task.description || '');
-                        }
-                        if (task.order === undefined) {
-                            task.order = index;
                         }
                     });
                     
