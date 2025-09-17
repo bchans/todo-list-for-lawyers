@@ -2672,8 +2672,12 @@
                 try {
                     const importData = JSON.parse(e.target.result);
                     
+                    // Debug logging
+                    console.log('Parsed import data:', importData);
+                    
                     // Validate the import data structure
                     if (!validateImportData(importData)) {
+                        console.error('Validation failed for import data:', importData);
                         showNotification('Invalid file format. Please select a valid task export file.', 'error');
                         return;
                     }
@@ -2692,18 +2696,36 @@
             event.target.value = '';
         }
 
+        /**
+         * IMPORTANT: BACKWARDS COMPATIBILITY NOTE
+         * 
+         * When modifying the task data structure or import/export functionality,
+         * ALWAYS ensure backwards compatibility with older export files.
+         * 
+         * Key principles:
+         * 1. New properties should be optional and have sensible defaults
+         * 2. Validation should only check for essential properties (id, title, completed)
+         * 3. Import functions should gracefully handle missing properties
+         * 4. When adding new properties, update the performImport() function to set defaults
+         * 5. Test imports with old export files before releasing changes
+         * 
+         * Current essential properties: id, title, completed
+         * Optional properties: createdAt, completedAt, description, customer, reminderDateTime, 
+         *                      subTasks, order, customOrder, stats, exportDate, exportType
+         */
         function validateImportData(data) {
             // Check if it has the expected structure
             if (!data || typeof data !== 'object') return false;
             if (!Array.isArray(data.tasks)) return false;
             if (!Array.isArray(data.customers)) return false;
             
-            // Validate task structure
+            // Validate task structure - be more flexible for backwards compatibility
             return data.tasks.every(task => 
                 task.id && 
                 task.title && 
-                typeof task.completed === 'boolean' &&
-                task.createdAt
+                typeof task.completed === 'boolean'
+                // All other properties are optional for backwards compatibility:
+                // - createdAt, completedAt, description, customer, reminderDateTime, subTasks, order, customOrder
             );
         }
 
@@ -2779,13 +2801,25 @@
 
         function confirmImport() {
             if (pendingImportData) {
+                // Store the data before closing the modal to avoid race condition
+                const importData = pendingImportData;
                 closeImportConfirm();
-                performImport(pendingImportData);
+                performImport(importData);
+            } else {
+                console.error('No pending import data available');
+                showNotification('Import data is missing. Please try importing again.', 'error');
             }
         }
 
         function performImport(importData) {
             try {
+                // Validate importData is not null
+                if (!importData || !importData.tasks) {
+                    throw new Error('Invalid import data: missing tasks array');
+                }
+                
+                // See validateImportData() function above for backwards compatibility guidelines
+                
                 // Merge tasks instead of replacing
                 const existingIds = new Set(tasks.map(t => t.id));
                 let updatedCount = 0;
@@ -2795,6 +2829,41 @@
                     // Ensure backward compatibility for any missing properties
                     if (!importTask.subTasks) {
                         importTask.subTasks = parseSubTasks(importTask.description || '');
+                    }
+                    
+                    // Ensure createdAt exists for backwards compatibility
+                    if (!importTask.createdAt) {
+                        importTask.createdAt = new Date().toISOString();
+                    }
+                    
+                    // Ensure completedAt exists if task is completed
+                    if (importTask.completed && !importTask.completedAt) {
+                        importTask.completedAt = new Date().toISOString();
+                    }
+                    
+                    // Ensure order exists
+                    if (importTask.order === undefined) {
+                        importTask.order = tasks.length + 1;
+                    }
+                    
+                    // Ensure customer exists (can be empty string)
+                    if (importTask.customer === undefined) {
+                        importTask.customer = '';
+                    }
+                    
+                    // Ensure reminderDateTime exists (can be empty string)
+                    if (importTask.reminderDateTime === undefined) {
+                        importTask.reminderDateTime = '';
+                    }
+                    
+                    // Ensure description exists (can be empty string)
+                    if (importTask.description === undefined) {
+                        importTask.description = '';
+                    }
+                    
+                    // Ensure customOrder exists if not present
+                    if (importTask.customOrder === undefined) {
+                        importTask.customOrder = null;
                     }
                     
                     if (existingIds.has(importTask.id)) {
