@@ -596,6 +596,10 @@
             text-align: center;
             box-shadow: var(--shadow);
             transition: var(--transition);
+            border: none;
+            outline: none;
+            display: block;
+            width: 100%;
         }
 
         .stat-card:hover {
@@ -898,6 +902,58 @@
             background: var(--secondary-color);
             color: var(--white);
         }
+        /* Clients avatar + assigned badge */
+        .client-avatar {
+            position: relative;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .client-assigned-badge {
+            position: absolute;
+            right: -4px;
+            bottom: -4px;
+            background: #2ecc71;
+            color: #fff;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 0 2px #fff;
+            transition: all 0.18s ease;
+        }
+
+        .client-avatar:hover .client-assigned-badge {
+            transform: scale(1.2);
+        }
+
+        .client-assigned-badge::after {
+            content: '';
+            position: absolute;
+            right: 20px;
+            bottom: 0;
+            background: #2ecc71;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+
+        .client-avatar:hover .client-assigned-badge::after {
+            content: 'Assigned to me';
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -910,22 +966,22 @@
         </div>
 
         <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number" id="totalTasks">0</div>
-                <div class="stat-label">Total Tasks</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="pendingTasks">0</div>
-                <div class="stat-label">Pending</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="completedTasks">0</div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-card">
+            <button class="stat-card" onclick="openPendingFromStats(true)" title="Show Overdue">
                 <div class="stat-number" id="overdueReminders">0</div>
                 <div class="stat-label">Overdue</div>
-            </div>
+            </button>
+            <button class="stat-card" onclick="openPendingFromStats(false)" title="Open Pending">
+                <div class="stat-number" id="pendingTasks">0</div>
+                <div class="stat-label">Pending</div>
+            </button>
+            <button class="stat-card" onclick="openCompletedFromStats()" title="Open Completed">
+                <div class="stat-number" id="completedTasks">0</div>
+                <div class="stat-label">Completed</div>
+            </button>
+            <button class="stat-card" onclick="openClientsFromStats()" title="Open Clients">
+                <div class="stat-number" id="totalTasks">0</div>
+                <div class="stat-label">Clients</div>
+            </button>
         </div>
 
         <div class="main-content">
@@ -1011,8 +1067,15 @@
                             <i class="fas fa-check-circle"></i> Completed Tasks
                             <span class="tab-badge" id="completedBadge">0</span>
                         </div>
+                        <div class="tab" onclick="switchTab('clients')">
+                            <i class="fas fa-users"></i> Clients
+                            <span class="tab-badge" id="clientsBadge">0</span>
+                        </div>
                     </div>
                     <div class="tab-actions">
+                        <button class="tab-action-btn" id="myClientsToggle" onclick="toggleMyClientsOnly()" title="Show only my clients" style="display: none;">
+                            <i class="fas fa-user-check"></i>
+                        </button>
                         <button class="tab-action-btn" onclick="openSettings()" title="Settings">
                             <i class="fas fa-cog"></i>
                         </button>
@@ -1042,6 +1105,51 @@
             </div>
             <div id="taskInfoContent">
                 <!-- Task info will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="clientInfoModal">
+        <div class="task-info-content">
+            <div class="task-info-header">
+                <h3><i class="fas fa-user"></i> Client Information</h3>
+                <button class="task-info-close" onclick="closeClientInfo()">&times;</button>
+            </div>
+            <div id="clientInfoContent"></div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="editClientModal">
+        <div class="task-info-content" style="max-width: 500px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-edit"></i> Edit Client</h3>
+                <button class="task-info-close" onclick="closeEditClient()">&times;</button>
+            </div>
+            <div id="editClientContent">
+                <div class="form-group">
+                    <label for="editClientName">Client Name *</label>
+                    <input type="text" id="editClientName" class="form-control" required>
+                </div>
+                <div class="form-group" style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
+                    <label style="margin:0;">Assignment</label>
+                    <button class="task-control-btn" id="editClientAssignedBtn" onclick="toggleEditClientAssigned()" title="Toggle assignment">
+                        <i class="fas fa-user-check"></i>
+                    </button>
+                    <input type="checkbox" id="editClientAssigned" style="display:none;">
+                    <span id="editClientAssignedText" style="color: var(--light-text); font-size: 0.9rem;">Not assigned</span>
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label for="editClientNotes">Notes</label>
+                    <textarea id="editClientNotes" class="form-control" rows="4" placeholder="Enter client notes..."></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="saveClientEdit()">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeEditClient()" style="background: #95a5a6;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1137,6 +1245,17 @@
                 <button class="task-info-close" onclick="closeSettings()">&times;</button>
             </div>
             <div id="settingsContent">
+                <div style="margin-bottom: 18px; font-weight: 600; color: var(--primary-color); display: flex; align-items: center; gap: 8px;"><i class="fas fa-user-cog"></i> Clients</div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label>
+                        <input type="checkbox" id="clientsTabEnabled"> Enable Clients tab
+                    </label>
+                    <p style="font-size: 0.9rem; color: var(--light-text); margin-top: 5px;">Show the Clients tab to view and manage your clients</p>
+                </div>
+
+                <hr style="margin: 14px 0; border: none; border-top: 1px solid var(--border-color);">
+
+                <div style="margin: 8px 0 10px; font-weight: 600; color: var(--primary-color); display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-export"></i> Export & Import</div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="autoExportEnabled" onchange="toggleAutoExport()"> 
@@ -1267,6 +1386,10 @@
         let selectedEditReminderOption = 'none';
         let currentEditingTaskId = null;
         let sortableInstance = null;
+        let clientsSortableInstance = null;
+        let clientsMeta = {};
+        let myClientsOnly = false;
+        let clientsTabEnabled = true;
         let autoExportEnabled = true;
         let autoExportDays = [5]; // Friday by default
         let autoExportTime = '16:00';
@@ -1694,6 +1817,147 @@
             saveTasks();
             filterTasks();
             showNotification('Task moved to top', 'success');
+        }
+
+        // Clients actions
+        function moveClientToTop(key) {
+            const clients = getClientsArray();
+            const idx = clients.findIndex(c => c.key === key);
+            if (idx === -1) return;
+            // Reassign order so this client becomes first
+            clients.forEach((c, i) => {
+                clientsMeta[c.key] = clientsMeta[c.key] || {};
+                clientsMeta[c.key].order = i + 1;
+            });
+            clientsMeta[key].order = 0;
+            saveClientsMeta();
+            if (currentTab === 'clients') renderClients();
+        }
+
+        function showClientInfo(key) {
+            const client = getClientsArray().find(c => c.key === key);
+            if (!client) return;
+            const modal = document.getElementById('clientInfoModal');
+            const content = document.getElementById('clientInfoContent');
+            const meta = clientsMeta[key] || {};
+            content.innerHTML = `
+                <div class="task-info-item">
+                    <div class="task-info-label">Client</div>
+                    <div class="task-info-value">${escapeHtml(client.name)}</div>
+                </div>
+                <div class="task-info-item">
+                    <div class="task-info-label">Assigned</div>
+                    <div class="task-info-value">${meta.assigned ? 'Yes' : 'No'}</div>
+                </div>
+                <div class="task-info-item">
+                    <div class="task-info-label">Notes</div>
+                    <div class="task-info-value">${meta.notes ? escapeHtml(meta.notes) : '<span style="color: var(--light-text)">No notes</span>'}</div>
+                </div>
+            `;
+            modal.classList.add('show');
+        }
+
+        function closeClientInfo() {
+            document.getElementById('clientInfoModal').classList.remove('show');
+        }
+
+        let currentEditingClientKey = null;
+        function editClient(key) {
+            const client = getClientsArray().find(c => c.key === key);
+            if (!client) return;
+            currentEditingClientKey = key;
+            const meta = clientsMeta[key] || {};
+            document.getElementById('editClientName').value = client.name;
+            document.getElementById('editClientAssigned').checked = !!meta.assigned;
+            const assignedText = document.getElementById('editClientAssignedText');
+            const assignedBtn = document.getElementById('editClientAssignedBtn');
+            if (assignedText && assignedBtn) {
+                assignedText.textContent = meta.assigned ? 'Assigned to me' : 'Not assigned';
+                assignedBtn.title = meta.assigned ? 'Unassign from me' : 'Assign to me';
+                assignedBtn.innerHTML = meta.assigned ? '<i class="fas fa-user-minus"></i>' : '<i class="fas fa-user-check"></i>';
+            }
+            document.getElementById('editClientNotes').value = meta.notes || '';
+            document.getElementById('editClientModal').classList.add('show');
+        }
+
+        function closeEditClient() {
+            currentEditingClientKey = null;
+            document.getElementById('editClientModal').classList.remove('show');
+        }
+
+        function saveClientEdit() {
+            if (!currentEditingClientKey) return;
+            const oldKey = currentEditingClientKey;
+            const newName = document.getElementById('editClientName').value.trim();
+            const assigned = document.getElementById('editClientAssigned').checked;
+            const notes = document.getElementById('editClientNotes').value.trim();
+            if (!newName) {
+                showNotification('Please enter a client name', 'error');
+                return;
+            }
+            const newKey = getClientKey(newName);
+            const meta = clientsMeta[oldKey] || {};
+            // If name changed and key differs, remap meta and tasks
+            if (newKey !== oldKey) {
+                clientsMeta[newKey] = { ...meta };
+                delete clientsMeta[oldKey];
+                // Update tasks referencing old name
+                tasks.forEach(t => {
+                    if (t.customer === oldKey) t.customer = newKey;
+                });
+            }
+            clientsMeta[newKey] = clientsMeta[newKey] || {};
+            clientsMeta[newKey].assigned = assigned;
+            clientsMeta[newKey].notes = notes;
+            saveTasks();
+            updateCustomerList();
+            filterTasks();
+            if (currentTab === 'clients') renderClients();
+            closeEditClient();
+            showNotification('Client updated successfully!', 'success');
+        }
+
+        function toggleEditClientAssigned() {
+            const checkbox = document.getElementById('editClientAssigned');
+            const assignedText = document.getElementById('editClientAssignedText');
+            const assignedBtn = document.getElementById('editClientAssignedBtn');
+            if (!checkbox || !assignedText || !assignedBtn) return;
+            checkbox.checked = !checkbox.checked;
+            const isAssigned = checkbox.checked;
+            assignedText.textContent = isAssigned ? 'Assigned to me' : 'Not assigned';
+            assignedBtn.title = isAssigned ? 'Unassign from me' : 'Assign to me';
+            assignedBtn.innerHTML = isAssigned ? '<i class=\"fas fa-user-minus\"></i>' : '<i class=\"fas fa-user-check\"></i>';
+        }
+
+        function openPendingFromStats(overdueOnly) {
+            switchTab('pending');
+            if (overdueOnly) {
+                const filtered = getFilteredTasks().filter(t => t.reminderDateTime && new Date(t.reminderDateTime) < new Date() && !t.completed);
+                displayTasks(filtered, true);
+            }
+        }
+
+        function openCompletedFromStats() {
+            switchTab('completed');
+        }
+
+        function openClientsFromStats() {
+            switchTab('clients');
+        }
+
+        function deleteClient(key) {
+            const name = key;
+            // Remove client meta
+            if (clientsMeta[key]) delete clientsMeta[key];
+            // Remove client assignment from tasks; keep tasks but clear customer
+            tasks.forEach(t => {
+                if (t.customer === name) t.customer = '';
+            });
+            saveTasks();
+            updateCustomerList();
+            filterTasks();
+            if (currentTab === 'clients') renderClients();
+            showNotification('Client deleted. Tasks retained without client.', 'success');
         }
 
         function editTask(taskId) {
@@ -2126,11 +2390,19 @@
         function switchTab(tab) {
             currentTab = tab;
             
-            // Update tab appearance
+            // Update tab appearance (do not rely on event)
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.closest('.tab').classList.add('active');
+            const targetTab = document.querySelector(`.tabs-container .tab[onclick="switchTab('${tab}')"]`);
+            if (targetTab) targetTab.classList.add('active');
             
-            filterTasks();
+            const myToggle = document.getElementById('myClientsToggle');
+            if (currentTab === 'clients') {
+                if (myToggle) myToggle.style.display = 'inline-flex';
+                renderClients(); // rendering clients has no per-item fade-in
+            } else {
+                if (myToggle) myToggle.style.display = 'none';
+                filterTasksWithoutAnimation(); // avoid fade-in each time tab opens
+            }
         }
 
         // Customer management
@@ -2165,6 +2437,12 @@
                 }
             });
             
+            // Sync the customers Set used by Clients tab
+            customers = new Set(Object.keys(customerCounts));
+            // Update Clients tab badge count
+            const clientsBadge = document.getElementById('clientsBadge');
+            if (clientsBadge) clientsBadge.textContent = Object.keys(customerCounts).length;
+
             Object.entries(customerCounts)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .forEach(([customer, count]) => {
@@ -2177,6 +2455,11 @@
                     `;
                     customerList.appendChild(customerItem);
                 });
+
+            // If the Clients tab is active, re-render to reflect changes immediately
+            if (currentTab === 'clients') {
+                renderClients();
+            }
         }
 
         let selectedSuggestionIndex = -1;
@@ -2283,7 +2566,9 @@
 
         // Statistics
         function updateStats() {
-            const total = tasks.length;
+            // Total Clients = number of unique clients derived from tasks
+            const uniqueClients = Array.from(new Set(tasks.map(t => t.customer).filter(Boolean)));
+            const total = uniqueClients.length;
             const pending = tasks.filter(t => !t.completed).length;
             const completed = tasks.filter(t => t.completed).length;
             const overdue = tasks.filter(t => 
@@ -2292,7 +2577,8 @@
                 !t.completed
             ).length;
             
-            document.getElementById('totalTasks').textContent = total;
+            const totalEl = document.getElementById('totalTasks');
+            if (totalEl) totalEl.textContent = total;
             document.getElementById('pendingTasks').textContent = pending;
             document.getElementById('completedTasks').textContent = completed;
             document.getElementById('overdueReminders').textContent = overdue;
@@ -2880,8 +3166,13 @@
                     }
                 });
                 
-                // Merge customers (add new ones, keep existing)
-                importData.customers.forEach(customer => {
+                // Merge customers (add new ones, keep existing) with backward compatibility
+                const importedCustomers = Array.isArray(importData.customers) && importData.customers.length > 0
+                    ? importData.customers
+                    : Array.from(new Set((importData.tasks || [])
+                        .map(t => t.customer)
+                        .filter(Boolean)));
+                importedCustomers.forEach(customer => {
                     customers.add(customer);
                 });
                 
@@ -2945,6 +3236,7 @@
                     autoExportEnabled = settings.autoExportEnabled !== undefined ? settings.autoExportEnabled : true;
                     autoExportDays = settings.autoExportDays !== undefined ? settings.autoExportDays : [5];
                     autoExportTime = settings.autoExportTime !== undefined ? settings.autoExportTime : '16:00';
+                    clientsTabEnabled = settings.clientsTabEnabled !== undefined ? settings.clientsTabEnabled : true;
                     
                     // Handle legacy single day setting
                     if (settings.autoExportDay !== undefined && !settings.autoExportDays) {
@@ -2967,7 +3259,8 @@
                 const settings = {
                     autoExportEnabled,
                     autoExportDays,
-                    autoExportTime
+                    autoExportTime,
+                    clientsTabEnabled
                 };
                 localStorage.setItem('legalTasksSettings', JSON.stringify(settings));
             } catch (error) {
@@ -2978,6 +3271,7 @@
         function updateSettingsDisplay() {
             document.getElementById('autoExportEnabled').checked = autoExportEnabled;
             document.getElementById('exportTime').value = autoExportTime;
+            document.getElementById('clientsTabEnabled').checked = clientsTabEnabled;
             
             // Update day checkboxes
             for (let i = 0; i <= 6; i++) {
@@ -2998,6 +3292,20 @@
             
             // Update export statistics
             updateExportStatistics();
+
+            // Show/hide Clients tab
+            const clientsTab = document.querySelector(".tabs-container .tab[onclick=\"switchTab('clients')\"]");
+            const myToggle = document.getElementById('myClientsToggle');
+            if (clientsTab) clientsTab.style.display = clientsTabEnabled ? 'flex' : 'none';
+            if (!clientsTabEnabled && currentTab === 'clients') {
+                // If disabled while on clients, switch back to pending
+                currentTab = 'pending';
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                const pendingTab = document.querySelector(".tabs-container .tab[onclick=\"switchTab('pending')\"]");
+                if (pendingTab) pendingTab.classList.add('active');
+                if (myToggle) myToggle.style.display = 'none';
+                filterTasks();
+            }
         }
 
         function updateExportStatistics() {
@@ -3132,6 +3440,7 @@
             try {
                 localStorage.setItem('legalTasks', JSON.stringify(tasks));
                 localStorage.setItem('legalCustomers', JSON.stringify([...customers]));
+                localStorage.setItem('legalClientsMeta', JSON.stringify(clientsMeta));
             } catch (error) {
                 showNotification('Error saving tasks', 'error');
                 console.error('Error saving tasks:', error);
@@ -3160,12 +3469,145 @@
                 if (savedCustomers) {
                     customers = new Set(JSON.parse(savedCustomers));
                 }
+                const savedClientsMeta = localStorage.getItem('legalClientsMeta');
+                if (savedClientsMeta) {
+                    clientsMeta = JSON.parse(savedClientsMeta);
+                }
                 
                 updateCustomerSuggestions();
             } catch (error) {
                 showNotification('Error loading tasks', 'error');
                 console.error('Error loading tasks:', error);
             }
+        }
+
+        // Clients helpers and UI
+        function getClientKey(name) {
+            return name || '';
+        }
+
+        function getClientsArray() {
+            const names = [...customers];
+            const clients = names.map((name, idx) => {
+                const key = getClientKey(name);
+                const meta = clientsMeta[key] || {};
+                const seed = Array.from(key).reduce((a, c) => (a + c.charCodeAt(0)) % 1000, 0);
+                const palette = ['#6c5ce7','#e17055','#00b894','#0984e3','#fdcb6e','#e84393','#2d3436','#16a085'];
+                const icons = ['user','user-tie','user-circle','user-astronaut','user-nurse','user-secret','user-shield','user'];
+                const color = meta.color || palette[seed % palette.length];
+                const icon = meta.icon || icons[seed % icons.length];
+                const assigned = !!meta.assigned;
+                const order = typeof meta.order === 'number' ? meta.order : idx;
+                return { name, key, color, icon, assigned, order };
+            });
+            clients.sort((a, b) => a.order - b.order);
+            return clients;
+        }
+
+        function saveClientsMeta() {
+            try {
+                localStorage.setItem('legalClientsMeta', JSON.stringify(clientsMeta));
+            } catch (e) {
+                console.error('Error saving clients meta', e);
+            }
+        }
+
+        function renderClients() {
+            const taskList = document.getElementById('taskList');
+            if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+            if (clientsSortableInstance) { clientsSortableInstance.destroy(); clientsSortableInstance = null; }
+
+            const allClients = getClientsArray();
+            const filtered = myClientsOnly ? allClients.filter(c => c.assigned) : allClients;
+
+            const clientsBadge = document.getElementById('clientsBadge');
+            if (clientsBadge) clientsBadge.textContent = allClients.length;
+
+            if (filtered.length === 0) {
+                taskList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>No ${myClientsOnly ? 'assigned' : ''} clients</h3>
+                        <p>${allClients.length === 0 ? 'Add tasks with customer names to populate clients.' : 'Assign clients to yourself or clear filters.'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            taskList.innerHTML = filtered.map(c => `
+                <div class="task-item" data-client-key="${escapeHtml(c.key)}">
+                    <div class="task-controls">
+                        <button class="task-control-btn" onclick="toggleAssignClient('${c.key.replace(/'/g, "&#39;")}')" title="${c.assigned ? 'Unassign from me' : 'Assign to me'}">
+                            <i class="fas ${c.assigned ? 'fa-user-minus' : 'fa-user-check'}"></i>
+                        </button>
+                        <button class="task-control-btn" onclick="moveClientToTop('${c.key.replace(/'/g, "&#39;")}')" title="Move to Top">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button class="task-control-btn" onclick="showClientInfo('${c.key.replace(/'/g, "&#39;")}')" title="Client Information">
+                            <i class="fas fa-info-circle"></i>
+                        </button>
+                        <button class="task-control-btn" onclick="editClient('${c.key.replace(/'/g, "&#39;")}')" title="Edit Client">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="task-control-btn delete" onclick="deleteClient('${c.key.replace(/'/g, "&#39;")}')" title="Delete Client">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="task-header" style="align-items: center; gap: 12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="position:relative; width:36px; height:36px; border-radius:50%; background:${c.color}; color:#fff; display:flex; align-items:center; justify-content:center;">
+                                <i class="fas fa-${c.icon}"></i>
+                                ${c.assigned ? '<span style="position:absolute; right:-4px; bottom:-4px; background:#2ecc71; color:#fff; border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 0 2px #fff;"><i class="fas fa-check" style="font-size:10px;"></i></span>' : ''}
+                            </div>
+                            <div class="task-title">${escapeHtml(c.name)}
+                                ${clientsMeta[c.key] && clientsMeta[c.key].notes ? `<div style=\"color: var(--light-text); font-size: 0.9rem; margin-top: 5px; line-height: 1.4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 400;\">${escapeHtml(clientsMeta[c.key].notes)}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            initializeClientsSortable();
+        }
+
+        function initializeClientsSortable() {
+            const list = document.getElementById('taskList');
+            clientsSortableInstance = new Sortable(list, {
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                animation: 150,
+                easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                filter: '.btn, .btn *, .task-control-btn, .task-control-btn *',
+                preventOnFilter: false,
+                onEnd: function() {
+                    const items = list.querySelectorAll('[data-client-key]');
+                    items.forEach((el, idx) => {
+                        const key = el.getAttribute('data-client-key');
+                        clientsMeta[key] = clientsMeta[key] || {};
+                        clientsMeta[key].order = idx;
+                    });
+                    saveClientsMeta();
+                    showNotification('Clients order updated', 'success');
+                }
+            });
+        }
+
+        function toggleAssignClient(key) {
+            clientsMeta[key] = clientsMeta[key] || {};
+            clientsMeta[key].assigned = !clientsMeta[key].assigned;
+            saveClientsMeta();
+            if (currentTab === 'clients') renderClients();
+        }
+
+        function toggleMyClientsOnly() {
+            myClientsOnly = !myClientsOnly;
+            const btn = document.getElementById('myClientsToggle');
+            if (btn) {
+                btn.title = myClientsOnly ? 'Showing only my clients' : 'Show only my clients';
+                btn.innerHTML = myClientsOnly ? '<i class="fas fa-filter"></i>' : '<i class="fas fa-user-check"></i>';
+            }
+            if (currentTab === 'clients') renderClients();
         }
 
         // Utility functions
