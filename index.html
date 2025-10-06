@@ -3512,6 +3512,7 @@
                 const savedTasks = localStorage.getItem('legalTasks');
                 const savedCustomers = localStorage.getItem('legalCustomers');
                 
+                let tasksMigrated = false;
                 if (savedTasks) {
                     tasks = JSON.parse(savedTasks);
                     persistLog('tasks.load', { tasksCount: tasks.length });
@@ -3522,9 +3523,8 @@
                             task.subTasks = parseSubTasks(task.description || '');
                         }
                     });
-                    
-                    // Save updated tasks
-                    saveTasks();
+                    // Defer saving until after customers and clientsMeta are loaded
+                    tasksMigrated = true;
                 }
                 
                 if (savedCustomers) {
@@ -3535,6 +3535,12 @@
                 if (savedClientsMeta) {
                     clientsMeta = JSON.parse(savedClientsMeta);
                     persistLog('clientsMeta.load', clientsMeta);
+                }
+                
+                // Now that all pieces are loaded, persist any migrations exactly once
+                if (tasksMigrated) {
+                    persistLog('tasks.migration.save', { tasksCount: tasks.length, customersCount: customers.size, hasClientsMeta: Object.keys(clientsMeta || {}).length > 0 });
+                    saveTasks();
                 }
                 
                 updateCustomerSuggestions();
