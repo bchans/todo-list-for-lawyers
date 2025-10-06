@@ -1248,7 +1248,7 @@
                 <div style="margin-bottom: 18px; font-weight: 600; color: var(--primary-color); display: flex; align-items: center; gap: 8px;"><i class="fas fa-user-cog"></i> Clients</div>
                 <div class="form-group" style="margin-bottom: 16px;">
                     <label>
-                        <input type="checkbox" id="clientsTabEnabled"> Enable Clients tab
+                        <input type="checkbox" id="clientsTabEnabled" onchange="toggleClientsTabEnabled()"> Enable Clients tab
                     </label>
                     <p style="font-size: 0.9rem; color: var(--light-text); margin-top: 5px;">Show the Clients tab to view and manage your clients</p>
                 </div>
@@ -2389,6 +2389,8 @@
         // Tab management
         function switchTab(tab) {
             currentTab = tab;
+            // Persist tab selection with settings
+            saveSettingsToStorage();
             
             // Update tab appearance (do not rely on event)
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -3237,6 +3239,17 @@
                     autoExportDays = settings.autoExportDays !== undefined ? settings.autoExportDays : [5];
                     autoExportTime = settings.autoExportTime !== undefined ? settings.autoExportTime : '16:00';
                     clientsTabEnabled = settings.clientsTabEnabled !== undefined ? settings.clientsTabEnabled : true;
+                    // Persisted Clients filter
+                    myClientsOnly = settings.myClientsOnly !== undefined ? settings.myClientsOnly : false;
+                    // Persisted selected tab
+                    if (settings.currentTab) {
+                        // If saved tab is clients but clients tab is disabled, fallback to pending
+                        if (settings.currentTab === 'clients' && !clientsTabEnabled) {
+                            currentTab = 'pending';
+                        } else {
+                            currentTab = settings.currentTab;
+                        }
+                    }
                     
                     // Handle legacy single day setting
                     if (settings.autoExportDay !== undefined && !settings.autoExportDays) {
@@ -3248,6 +3261,13 @@
                         autoExportDays,
                         autoExportTime
                     });
+
+                    // Reflect persisted my-clients filter on the toggle button if present
+                    const btn = document.getElementById('myClientsToggle');
+                    if (btn) {
+                        btn.title = myClientsOnly ? 'Showing only my clients' : 'Show only my clients';
+                        btn.innerHTML = myClientsOnly ? '<i class="fas fa-filter"></i>' : '<i class="fas fa-user-check"></i>';
+                    }
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -3260,7 +3280,9 @@
                     autoExportEnabled,
                     autoExportDays,
                     autoExportTime,
-                    clientsTabEnabled
+                    clientsTabEnabled,
+                    myClientsOnly,
+                    currentTab
                 };
                 localStorage.setItem('legalTasksSettings', JSON.stringify(settings));
             } catch (error) {
@@ -3306,6 +3328,13 @@
                 if (myToggle) myToggle.style.display = 'none';
                 filterTasks();
             }
+        }
+
+        function toggleClientsTabEnabled() {
+            const checkbox = document.getElementById('clientsTabEnabled');
+            clientsTabEnabled = !!(checkbox && checkbox.checked);
+            saveSettingsToStorage();
+            updateSettingsDisplay();
         }
 
         function updateExportStatistics() {
@@ -3523,6 +3552,13 @@
             const clientsBadge = document.getElementById('clientsBadge');
             if (clientsBadge) clientsBadge.textContent = allClients.length;
 
+            // Ensure toggle button reflects current state when entering Clients tab
+            const btn = document.getElementById('myClientsToggle');
+            if (btn) {
+                btn.title = myClientsOnly ? 'Showing only my clients' : 'Show only my clients';
+                btn.innerHTML = myClientsOnly ? '<i class="fas fa-filter"></i>' : '<i class="fas fa-user-check"></i>';
+            }
+
             if (filtered.length === 0) {
                 taskList.innerHTML = `
                     <div class="empty-state">
@@ -3607,6 +3643,8 @@
                 btn.title = myClientsOnly ? 'Showing only my clients' : 'Show only my clients';
                 btn.innerHTML = myClientsOnly ? '<i class="fas fa-filter"></i>' : '<i class="fas fa-user-check"></i>';
             }
+            // Persist this preference with the other settings
+            saveSettingsToStorage();
             if (currentTab === 'clients') renderClients();
         }
 
