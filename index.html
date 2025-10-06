@@ -1400,6 +1400,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadTasks();
             loadSettings();
+            // Ensure UI reflects saved settings immediately on load
+            updateSettingsDisplay();
+            // Switch to saved tab if needed
+            if (currentTab && currentTab !== 'pending') {
+                switchTab(currentTab);
+            }
             updateStats();
             updateCustomerList();
             filterTasks();
@@ -1909,6 +1915,8 @@
             clientsMeta[newKey] = clientsMeta[newKey] || {};
             clientsMeta[newKey].assigned = assigned;
             clientsMeta[newKey].notes = notes;
+            // Persist meta immediately so assignment/notes survive reloads without relying solely on saveTasks
+            saveClientsMeta();
             saveTasks();
             updateCustomerList();
             filterTasks();
