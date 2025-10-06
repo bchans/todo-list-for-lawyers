@@ -1396,16 +1396,29 @@
         let autoExportInterval = null;
         let autoExportTimeout = null;
 
+        // Structured persistence logging helpers
+        const SESSION_ID = 'S' + new Date().toISOString();
+        function persistLog(event, details) {
+            try { console.log(`[PERSIST][${SESSION_ID}][${event}]`, details); } catch (e) {}
+        }
+
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
+            persistLog('startup.begin', {});
             loadTasks();
             loadSettings();
+            persistLog('startup.afterLoad', {
+                settings: JSON.parse(localStorage.getItem('legalTasksSettings') || '{}'),
+                clientsMeta: JSON.parse(localStorage.getItem('legalClientsMeta') || '{}'),
+                currentTab
+            });
             // Ensure UI reflects saved settings immediately on load
             updateSettingsDisplay();
             // Switch to saved tab if needed
             if (currentTab && currentTab !== 'pending') {
                 switchTab(currentTab);
             }
+            persistLog('startup.afterUIApply', { currentTab, clientsTabEnabled, myClientsOnly });
             updateStats();
             updateCustomerList();
             filterTasks();
@@ -1917,6 +1930,7 @@
             clientsMeta[newKey].notes = notes;
             // Persist meta immediately so assignment/notes survive reloads without relying solely on saveTasks
             saveClientsMeta();
+            persistLog('clientsMeta.saveClientEdit', { key: newKey, assigned, notesLength: notes.length });
             saveTasks();
             updateCustomerList();
             filterTasks();
@@ -2399,6 +2413,7 @@
             currentTab = tab;
             // Persist tab selection with settings
             saveSettingsToStorage();
+            persistLog('tab.switch', { currentTab });
             
             // Update tab appearance (do not rely on event)
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -3243,6 +3258,7 @@
                 
                 if (savedSettings) {
                     const settings = JSON.parse(savedSettings);
+                    persistLog('settings.load', settings);
                     autoExportEnabled = settings.autoExportEnabled !== undefined ? settings.autoExportEnabled : true;
                     autoExportDays = settings.autoExportDays !== undefined ? settings.autoExportDays : [5];
                     autoExportTime = settings.autoExportTime !== undefined ? settings.autoExportTime : '16:00';
@@ -3269,6 +3285,7 @@
                         autoExportDays,
                         autoExportTime
                     });
+                    persistLog('settings.apply', { clientsTabEnabled, myClientsOnly, currentTab });
 
                     // Reflect persisted my-clients filter on the toggle button if present
                     const btn = document.getElementById('myClientsToggle');
@@ -3279,6 +3296,7 @@
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
+                persistLog('settings.load.error', { error: String(error) });
             }
         }
 
@@ -3293,8 +3311,10 @@
                     currentTab
                 };
                 localStorage.setItem('legalTasksSettings', JSON.stringify(settings));
+                persistLog('settings.save', settings);
             } catch (error) {
                 console.error('Error saving settings:', error);
+                persistLog('settings.save.error', { error: String(error) });
             }
         }
 
@@ -3342,6 +3362,7 @@
             const checkbox = document.getElementById('clientsTabEnabled');
             clientsTabEnabled = !!(checkbox && checkbox.checked);
             saveSettingsToStorage();
+            persistLog('settings.toggle.clientsTabEnabled', { clientsTabEnabled });
             updateSettingsDisplay();
         }
 
@@ -3478,9 +3499,11 @@
                 localStorage.setItem('legalTasks', JSON.stringify(tasks));
                 localStorage.setItem('legalCustomers', JSON.stringify([...customers]));
                 localStorage.setItem('legalClientsMeta', JSON.stringify(clientsMeta));
+                persistLog('tasks.save', { tasksCount: tasks.length, customersCount: customers.size });
             } catch (error) {
                 showNotification('Error saving tasks', 'error');
                 console.error('Error saving tasks:', error);
+                persistLog('tasks.save.error', { error: String(error) });
             }
         }
 
@@ -3491,6 +3514,7 @@
                 
                 if (savedTasks) {
                     tasks = JSON.parse(savedTasks);
+                    persistLog('tasks.load', { tasksCount: tasks.length });
                     
                     // Handle backward compatibility and update existing tasks with sub-tasks
                     tasks.forEach((task, index) => {
@@ -3505,16 +3529,19 @@
                 
                 if (savedCustomers) {
                     customers = new Set(JSON.parse(savedCustomers));
+                    persistLog('customers.load', { customersCount: customers.size });
                 }
                 const savedClientsMeta = localStorage.getItem('legalClientsMeta');
                 if (savedClientsMeta) {
                     clientsMeta = JSON.parse(savedClientsMeta);
+                    persistLog('clientsMeta.load', clientsMeta);
                 }
                 
                 updateCustomerSuggestions();
             } catch (error) {
                 showNotification('Error loading tasks', 'error');
                 console.error('Error loading tasks:', error);
+                persistLog('tasks.load.error', { error: String(error) });
             }
         }
 
@@ -3544,8 +3571,10 @@
         function saveClientsMeta() {
             try {
                 localStorage.setItem('legalClientsMeta', JSON.stringify(clientsMeta));
+                persistLog('clientsMeta.save', clientsMeta);
             } catch (e) {
                 console.error('Error saving clients meta', e);
+                persistLog('clientsMeta.save.error', { error: String(e) });
             }
         }
 
@@ -3641,6 +3670,7 @@
             clientsMeta[key] = clientsMeta[key] || {};
             clientsMeta[key].assigned = !clientsMeta[key].assigned;
             saveClientsMeta();
+            persistLog('clientsMeta.toggleAssigned', { key, assigned: clientsMeta[key].assigned });
             if (currentTab === 'clients') renderClients();
         }
 
@@ -3653,6 +3683,7 @@
             }
             // Persist this preference with the other settings
             saveSettingsToStorage();
+            persistLog('settings.toggle.myClientsOnly', { myClientsOnly });
             if (currentTab === 'clients') renderClients();
         }
 
