@@ -1421,7 +1421,10 @@
             persistLog('startup.afterUIApply', { currentTab, clientsTabEnabled, myClientsOnly });
             updateStats();
             updateCustomerList();
-            filterTasks();
+            // Only filter tasks if we're not on the clients tab (clients already rendered by switchTab)
+            if (currentTab !== 'clients') {
+                filterTasks();
+            }
             setupNotifications();
             checkReminders();
             
@@ -1433,6 +1436,9 @@
             
             // Set up automatic export with smart scheduling
             setupSmartExportScheduling();
+            
+            // Check for pending exports from previous sessions
+            checkPendingExport();
             
             // Set up offline detection
             setupOfflineDetection();
@@ -2682,6 +2688,7 @@
                 max-width: 350px;
                 transform: translateX(400px);
                 transition: var(--transition);
+                animation: pulse 2s ease-in-out infinite;
             `;
             
             notification.innerHTML = `
@@ -2690,7 +2697,7 @@
                     <strong>Scheduled Export Ready</strong>
                 </div>
                 <div style="margin-bottom: 15px; font-weight: normal; opacity: 0.9;">
-                    It's time for your automatic task export. Would you like to download your tasks now?
+                    It's time for your automatic task export. This reminder will persist until you take action.
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button onclick="confirmExport(this)" style="
@@ -2705,7 +2712,7 @@
                     ">
                         <i class="fas fa-download"></i> Export Now
                     </button>
-                    <button onclick="dismissExport(this)" style="
+                    <button onclick="skipExport(this)" style="
                         background: rgba(255,255,255,0.2);
                         color: var(--white);
                         border: 1px solid rgba(255,255,255,0.3);
@@ -2715,7 +2722,7 @@
                         font-weight: 600;
                         flex: 1;
                     ">
-                        <i class="fas fa-times"></i> Later
+                        <i class="fas fa-times"></i> Skip
                     </button>
                 </div>
             `;
@@ -2727,12 +2734,7 @@
                 notification.style.transform = 'translateX(0)';
             }, 100);
             
-            // Auto-dismiss after 30 seconds if no action
-            setTimeout(() => {
-                if (document.body.contains(notification)) {
-                    dismissExport(notification.querySelector('button[onclick*="dismissExport"]'));
-                }
-            }, 30000);
+            // NO auto-dismiss - user must take action
         }
 
         function confirmExport(button) {
@@ -2745,6 +2747,9 @@
             const now = new Date();
             localStorage.setItem('lastAutoExport', now.toISOString());
             
+            // Clear pending export flag
+            localStorage.removeItem('pendingExport');
+            
             // Remove notification
             notification.style.transform = 'translateX(400px)';
             setTimeout(() => {
@@ -2754,7 +2759,7 @@
             }, 300);
         }
 
-        function dismissExport(button) {
+        function skipExport(button) {
             const notification = button.closest('.export-prompt');
             
             // Remove notification
@@ -2765,13 +2770,44 @@
                 }
             }, 300);
             
-            // Mark as dismissed for today to prevent repeated notifications
+            // Clear pending export flag - user explicitly skipped
+            localStorage.removeItem('pendingExport');
+            
+            // Mark as skipped for this scheduled export
             const now = new Date();
-            const today_string = now.toISOString().split('T')[0];
-            localStorage.setItem('lastExportDismissal', today_string);
+            localStorage.setItem('lastAutoExport', now.toISOString());
             
             // Show brief message
-            showNotification('Export reminder dismissed. You can manually export anytime.', 'warning');
+            showNotification('Export skipped. You can manually export anytime from settings.', 'warning');
+        }
+
+        // For backwards compatibility - redirect old dismissExport calls to skipExport
+        function dismissExport(button) {
+            skipExport(button);
+        }
+
+        // Check for pending exports on page load
+        function checkPendingExport() {
+            // Clean up old dismissal system (backwards compatibility)
+            localStorage.removeItem('lastExportDismissal');
+            
+            const pendingExportData = localStorage.getItem('pendingExport');
+            
+            if (pendingExportData) {
+                try {
+                    const pendingExport = JSON.parse(pendingExportData);
+                    console.log('Found pending export from:', pendingExport);
+                    
+                    // Show the notification
+                    setTimeout(() => {
+                        showExportNotification();
+                    }, 1000); // Wait 1 second after page load to show notification
+                } catch (error) {
+                    console.error('Error parsing pending export data:', error);
+                    // Clean up corrupted data
+                    localStorage.removeItem('pendingExport');
+                }
+            }
         }
 
         // Offline functionality
@@ -2898,13 +2934,20 @@
             if (autoExportDays.includes(today) && currentTime >= exportTimeMinutes) {
                 const lastExportKey = 'lastAutoExport';
                 const lastExport = localStorage.getItem(lastExportKey);
-                const lastDismissal = localStorage.getItem('lastExportDismissal');
                 
-                // Check if we haven't exported today yet AND haven't dismissed today
+                // Check if we haven't exported today yet
                 const alreadyExported = lastExport && lastExport.startsWith(today_string);
-                const alreadyDismissed = lastDismissal && lastDismissal === today_string;
                 
-                if (!alreadyExported && !alreadyDismissed) {
+                if (!alreadyExported) {
+                    console.log('AUTO EXPORT: Setting pending export flag');
+                    // Set pending export flag with timestamp
+                    localStorage.setItem('pendingExport', JSON.stringify({
+                        scheduledDate: today_string,
+                        scheduledTime: autoExportTime,
+                        timestamp: now.toISOString()
+                    }));
+                    
+                    // Show notification
                     console.log('AUTO EXPORT: Triggering export notification');
                     try {
                         showExportNotification();
@@ -2912,7 +2955,7 @@
                         console.error('AUTO EXPORT: Error showing notification:', error);
                     }
                 } else {
-                    console.log('AUTO EXPORT: Already handled today - exported:', alreadyExported, 'dismissed:', alreadyDismissed);
+                    console.log('AUTO EXPORT: Already exported today');
                 }
             }
         }
@@ -2930,6 +2973,7 @@
                     exportType: isAutomatic ? 'automatic' : 'manual',
                     tasks: tasks,
                     customers: [...customers],
+                    clientsMeta: clientsMeta, // Include client notes, assigned status, and order
                     stats: {
                         total: tasks.length,
                         pending: tasks.filter(t => !t.completed).length,
@@ -3200,6 +3244,25 @@
                 importedCustomers.forEach(customer => {
                     customers.add(customer);
                 });
+                
+                // Merge clientsMeta (notes, assigned status, order) with backwards compatibility
+                // Only import if it exists in the export file (for backwards compatibility)
+                if (importData.clientsMeta && typeof importData.clientsMeta === 'object') {
+                    // Merge with existing clientsMeta - don't replace, only add/update
+                    Object.keys(importData.clientsMeta).forEach(key => {
+                        if (!clientsMeta[key]) {
+                            // New client metadata - add it
+                            clientsMeta[key] = importData.clientsMeta[key];
+                        } else {
+                            // Existing client - merge properties, preferring imported data
+                            clientsMeta[key] = {
+                                ...clientsMeta[key],
+                                ...importData.clientsMeta[key]
+                            };
+                        }
+                    });
+                    saveClientsMeta();
+                }
                 
                 // Save merged data
                 saveTasks();
