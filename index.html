@@ -1234,6 +1234,10 @@
                 <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid var(--success-color);">
                     <strong>Peace of Mind:</strong> This application is built privacy-first. Your legal work and client information remain under your complete control.
                 </div>
+                
+                <div style="margin-top: 15px; text-align: center; font-size: 11px; color: #999; opacity: 0.7;">
+                    <span id="appVersion">v1.1.0</span> • Built with privacy in mind
+                </div>
             </div>
         </div>
     </div>
@@ -1375,6 +1379,9 @@
     </div>
 
     <script>
+        // App version
+        const APP_VERSION = 'v1.1.0';
+        
         // Global variables
         let tasks = [];
         let customers = new Set();
@@ -1404,7 +1411,8 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
-            persistLog('startup.begin', {});
+            console.log(`%c📋 Legal Task Manager ${APP_VERSION}`, 'color: #2196F3; font-weight: bold; font-size: 14px;');
+            persistLog('startup.begin', { version: APP_VERSION });
             loadTasks();
             loadSettings();
             persistLog('startup.afterLoad', {
