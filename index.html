@@ -1236,7 +1236,7 @@
                 </div>
                 
                 <div style="margin-top: 15px; text-align: center; font-size: 11px; color: #999; opacity: 0.7;">
-                    <span id="appVersion">v1.1.0</span> • Built with privacy in mind
+                    <span id="appVersion">v1.1.1</span> • Built with privacy in mind
                 </div>
             </div>
         </div>
@@ -1380,7 +1380,7 @@
 
     <script>
         // App version
-        const APP_VERSION = 'v1.1.0';
+        const APP_VERSION = 'v1.1.1';
         
         // Global variables
         let tasks = [];
@@ -2938,33 +2938,62 @@
                 isTimeReached: currentTime >= exportTimeMinutes
             });
             
-            // Check if today is an export day and we're past the export time
-            if (autoExportDays.includes(today) && currentTime >= exportTimeMinutes) {
-                const lastExportKey = 'lastAutoExport';
-                const lastExport = localStorage.getItem(lastExportKey);
+            const lastExportKey = 'lastAutoExport';
+            const lastExport = localStorage.getItem(lastExportKey);
+            const lastExportDate = lastExport ? new Date(lastExport) : null;
+            
+            // Check if we've missed any export days
+            let missedExport = false;
+            let missedExportDay = null;
+            
+            if (lastExportDate) {
+                // Check each day since last export
+                const daysSinceExport = Math.floor((now - lastExportDate) / (1000 * 60 * 60 * 24));
                 
-                // Check if we haven't exported today yet
-                const alreadyExported = lastExport && lastExport.startsWith(today_string);
-                
-                if (!alreadyExported) {
-                    console.log('AUTO EXPORT: Setting pending export flag');
-                    // Set pending export flag with timestamp
-                    localStorage.setItem('pendingExport', JSON.stringify({
-                        scheduledDate: today_string,
-                        scheduledTime: autoExportTime,
-                        timestamp: now.toISOString()
-                    }));
+                for (let i = 1; i <= daysSinceExport; i++) {
+                    const checkDate = new Date(lastExportDate);
+                    checkDate.setDate(checkDate.getDate() + i);
+                    const dayOfWeek = checkDate.getDay();
                     
-                    // Show notification
-                    console.log('AUTO EXPORT: Triggering export notification');
-                    try {
-                        showExportNotification();
-                    } catch (error) {
-                        console.error('AUTO EXPORT: Error showing notification:', error);
+                    // If this was an export day and we're past the time (or it's a past day)
+                    if (autoExportDays.includes(dayOfWeek)) {
+                        const isToday = checkDate.toISOString().split('T')[0] === today_string;
+                        const isPastTime = currentTime >= exportTimeMinutes;
+                        
+                        if (!isToday || isPastTime) {
+                            missedExport = true;
+                            missedExportDay = checkDate.toISOString().split('T')[0];
+                            console.log('AUTO EXPORT: Missed export on', missedExportDay);
+                            break;
+                        }
                     }
-                } else {
-                    console.log('AUTO EXPORT: Already exported today');
                 }
+            } else {
+                // No last export - check if today is export day and time has passed
+                if (autoExportDays.includes(today) && currentTime >= exportTimeMinutes) {
+                    missedExport = true;
+                    missedExportDay = today_string;
+                }
+            }
+            
+            if (missedExport) {
+                console.log('AUTO EXPORT: Setting pending export flag for', missedExportDay);
+                // Set pending export flag with timestamp
+                localStorage.setItem('pendingExport', JSON.stringify({
+                    scheduledDate: missedExportDay,
+                    scheduledTime: autoExportTime,
+                    timestamp: now.toISOString()
+                }));
+                
+                // Show notification
+                console.log('AUTO EXPORT: Triggering export notification');
+                try {
+                    showExportNotification();
+                } catch (error) {
+                    console.error('AUTO EXPORT: Error showing notification:', error);
+                }
+            } else {
+                console.log('AUTO EXPORT: No missed exports');
             }
         }
         
