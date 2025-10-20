@@ -389,6 +389,9 @@
             border-radius: 12px;
             font-size: 0.75rem;
             margin-left: 8px;
+            align-self: center;
+            height: fit-content;
+            line-height: 1;
         }
 
         .task-list {
@@ -455,6 +458,77 @@
         .task-item.completed .task-title {
             text-decoration: line-through;
             color: var(--light-text);
+        }
+
+        /* Client expandable items */
+        .client-item {
+            overflow: hidden;
+        }
+
+        .client-tasks-list {
+            overflow: hidden;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            will-change: max-height, opacity;
+            background: rgba(52, 152, 219, 0.03);
+            border-radius: 8px;
+            padding: 0;
+        }
+
+        .client-tasks-inner {
+            padding: 15px;
+        }
+
+        .client-tasks-section {
+            margin-bottom: 15px;
+        }
+
+        .client-tasks-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .client-task-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: var(--white);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .client-task-item:hover {
+            background: rgba(52, 152, 219, 0.08);
+            border-color: var(--secondary-color);
+            transform: translateX(4px);
+        }
+
+        .client-task-item span {
+            flex: 1;
+            font-size: 0.95rem;
+            color: var(--dark-text);
+        }
+
+        .client-item:hover {
+            border-color: var(--secondary-color);
+        }
+
+        .client-item.archived {
+            opacity: 0.7;
+        }
+
+        .client-archived-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: var(--light-text);
+            background: rgba(127, 140, 141, 0.15);
+            border: 1px solid rgba(127, 140, 141, 0.25);
         }
 
         .task-header {
@@ -1207,32 +1281,27 @@
     <div class="task-info-modal" id="privacyInfoModal">
         <div class="task-info-content" style="max-width: 500px;">
             <div class="task-info-header">
-                <h3><i class="fas fa-shield-alt"></i> Your Privacy is Protected</h3>
+                <h3><i class="fas fa-shield-alt"></i> Your Data Never Leaves Your Device</h3>
                 <button class="task-info-close" onclick="closePrivacyInfo()">&times;</button>
             </div>
             <div id="privacyInfoContent">
                 <div class="task-info-item">
-                    <div class="task-info-label">100% Local Storage</div>
-                    <div class="task-info-value">All your tasks, client names, and data stay on your device. Nothing is ever sent to our servers.</div>
+                    <div class="task-info-label"><i class="fas fa-laptop"></i> Local Storage Only</div>
+                    <div class="task-info-value">All tasks and client information are stored in your browser using HTML5 localStorage. Nothing is sent to any server.</div>
                 </div>
                 
                 <div class="task-info-item">
-                    <div class="task-info-label">No Data Collection</div>
-                    <div class="task-info-value">We don't track, analyze, or collect any of your information. Your work remains completely confidential.</div>
+                    <div class="task-info-label"><i class="fas fa-user-lock"></i> Zero Data Collection</div>
+                    <div class="task-info-value">No tracking, no analytics, no accounts. Your confidential work remains completely private.</div>
                 </div>
                 
                 <div class="task-info-item">
-                    <div class="task-info-label">Attorney-Client Privilege Safe</div>
-                    <div class="task-info-value">Designed with legal confidentiality in mind. Your sensitive client information never leaves your browser.</div>
+                    <div class="task-info-label"><i class="fas fa-wifi"></i> Works Completely Offline</div>
+                    <div class="task-info-value">Full functionality without internet connection. Safe for attorney-client privileged information.</div>
                 </div>
                 
-                <div class="task-info-item">
-                    <div class="task-info-label">Works Offline</div>
-                    <div class="task-info-value">Full functionality without internet connection. Your data stays secure even when offline.</div>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid var(--success-color);">
-                    <strong>Peace of Mind:</strong> This application is built privacy-first. Your legal work and client information remain under your complete control.
+                <div style="margin-top: 20px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem; color: var(--light-text);">
+                    <strong>Technical Note:</strong> Press F12 to verify — there are no network requests to external servers.
                 </div>
                 
                 <div style="margin-top: 15px; text-align: center; font-size: 11px; color: #999; opacity: 0.7;">
@@ -1503,7 +1572,13 @@
             updateStats();
             updateCustomerList();
             updateCustomerSuggestions();
-            filterTasks();
+            
+            // Only filter tasks if not on clients tab
+            if (currentTab === 'clients') {
+                renderClients();
+            } else {
+                filterTasks();
+            }
             
             // Clear form
             clearTaskForm();
@@ -3446,7 +3521,7 @@
             // Show/hide Clients tab
             const clientsTab = document.querySelector(".tabs-container .tab[onclick=\"switchTab('clients')\"]");
             const myToggle = document.getElementById('myClientsToggle');
-            if (clientsTab) clientsTab.style.display = clientsTabEnabled ? 'flex' : 'none';
+            if (clientsTab) clientsTab.style.display = clientsTabEnabled ? '' : 'none';
             if (!clientsTabEnabled && currentTab === 'clients') {
                 // If disabled while on clients, switch back to pending
                 currentTab = 'pending';
@@ -3690,10 +3765,17 @@
             if (clientsSortableInstance) { clientsSortableInstance.destroy(); clientsSortableInstance = null; }
 
             const allClients = getClientsArray();
-            const filtered = myClientsOnly ? allClients.filter(c => c.assigned) : allClients;
+            // Merge meta flags
+            allClients.forEach(c => {
+                const meta = clientsMeta[c.key] || {};
+                c.assigned = !!meta.assigned;
+                c.archived = !!meta.archived;
+            });
+            // When filtering to "my clients only", exclude archived; otherwise include all
+            const filtered = myClientsOnly ? allClients.filter(c => c.assigned && !c.archived) : allClients;
 
             const clientsBadge = document.getElementById('clientsBadge');
-            if (clientsBadge) clientsBadge.textContent = allClients.length;
+            if (clientsBadge) clientsBadge.textContent = filtered.length;
 
             // Ensure toggle button reflects current state when entering Clients tab
             const btn = document.getElementById('myClientsToggle');
@@ -3713,38 +3795,94 @@
                 return;
             }
 
-            taskList.innerHTML = filtered.map(c => `
-                <div class="task-item" data-client-key="${escapeHtml(c.key)}">
+            // Order: active (not archived) first, then archived
+            const activeClients = filtered.filter(c => !c.archived);
+            const archivedClients = filtered.filter(c => c.archived);
+            const ordered = activeClients.concat(archivedClients);
+
+            taskList.innerHTML = ordered.map(c => {
+                // Get tasks for this client
+                const clientTasks = tasks.filter(t => t.customer === c.name);
+                const pendingTasks = clientTasks.filter(t => !t.completed);
+                const completedTasks = clientTasks.filter(t => t.completed);
+                const totalTasks = clientTasks.length;
+                
+                // Generate task list HTML
+                const tasksHTML = totalTasks > 0 ? `
+                    <div class="client-tasks-list" style="display: none;">
+                        <div class="client-tasks-inner">
+                            ${pendingTasks.length > 0 ? `
+                                <div class="client-tasks-section">
+                                    <div style="font-weight: 600; color: var(--secondary-color); margin-bottom: 10px; font-size: 0.9rem;">
+                                        <i class="fas fa-clock"></i> Open Tasks (${pendingTasks.length})
+                                    </div>
+                                    ${pendingTasks.map(t => `
+                                        <div class="client-task-item" onclick="event.stopPropagation(); navigateToTask('${t.id}', false)" title="Click to view in Pending tab">
+                                            <i class="fas fa-circle" style="font-size: 6px; color: var(--secondary-color); margin-right: 8px;"></i>
+                                            <span>${escapeHtml(t.title)}</span>
+                                            ${t.reminderDateTime ? `<i class="fas fa-bell" style="margin-left: 8px; color: var(--warning-color); font-size: 0.85rem;"></i>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${completedTasks.length > 0 ? `
+                                <div class="client-tasks-section">
+                                    <div style="font-weight: 600; color: var(--success-color); margin-bottom: 10px; font-size: 0.9rem;">
+                                        <i class="fas fa-check-circle"></i> Completed Tasks (${completedTasks.length})
+                                    </div>
+                                    ${completedTasks.map(t => `
+                                        <div class="client-task-item completed" onclick="event.stopPropagation(); navigateToTask('${t.id}', true)" title="Click to view in Completed tab">
+                                            <i class="fas fa-check" style="font-size: 10px; color: var(--success-color); margin-right: 8px;"></i>
+                                            <span style="text-decoration: line-through; opacity: 0.7;">${escapeHtml(t.title)}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                ` : '';
+                
+                return `
+                <div class="task-item client-item${c.archived ? ' archived' : ''}" data-client-key="${escapeHtml(c.key)}" onclick="toggleClientExpansion('${c.key.replace(/'/g, "&#39;")}')" style="cursor: pointer;">
                     <div class="task-controls">
-                        <button class="task-control-btn" onclick="toggleAssignClient('${c.key.replace(/'/g, "&#39;")}')" title="${c.assigned ? 'Unassign from me' : 'Assign to me'}">
-                            <i class="fas ${c.assigned ? 'fa-user-minus' : 'fa-user-check'}"></i>
+                        ${totalTasks > 0 ? `
+                            <button class="task-control-btn client-expand-btn" onclick="event.stopPropagation(); toggleClientExpansion('${c.key.replace(/'/g, "&#39;")}')" title="Expand/Collapse tasks">
+                                <i class="fas fa-chevron-down client-expand-icon" style="transition: transform 0.3s ease;"></i>
+                            </button>
+                        ` : ''}
+                        <button class="task-control-btn" onclick="event.stopPropagation(); cycleClientState('${c.key.replace(/'/g, "&#39;")}')" title="${(!c.assigned && !c.archived) ? 'Assign to me' : (c.assigned && !c.archived) ? 'Archive client' : (c.assigned && c.archived) ? 'Unassign from me' : 'Unarchive client'}">
+                            <i class="fas ${(!c.assigned && !c.archived) ? 'fa-user-check' : (c.assigned && !c.archived) ? 'fa-box-archive' : (c.assigned && c.archived) ? 'fa-user-minus' : 'fa-box-open'}"></i>
                         </button>
-                        <button class="task-control-btn" onclick="moveClientToTop('${c.key.replace(/'/g, "&#39;")}')" title="Move to Top">
+                        <button class="task-control-btn" onclick="event.stopPropagation(); moveClientToTop('${c.key.replace(/'/g, "&#39;")}')" title="Move to Top">
                             <i class="fas fa-arrow-up"></i>
                         </button>
-                        <button class="task-control-btn" onclick="showClientInfo('${c.key.replace(/'/g, "&#39;")}')" title="Client Information">
+                        <button class="task-control-btn" onclick="event.stopPropagation(); showClientInfo('${c.key.replace(/'/g, "&#39;")}')" title="Client Information">
                             <i class="fas fa-info-circle"></i>
                         </button>
-                        <button class="task-control-btn" onclick="editClient('${c.key.replace(/'/g, "&#39;")}')" title="Edit Client">
+                        <button class="task-control-btn" onclick="event.stopPropagation(); editClient('${c.key.replace(/'/g, "&#39;")}')" title="Edit Client">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="task-control-btn delete" onclick="deleteClient('${c.key.replace(/'/g, "&#39;")}')" title="Delete Client">
+                        <button class="task-control-btn delete" onclick="event.stopPropagation(); deleteClient('${c.key.replace(/'/g, "&#39;")}')" title="Delete Client">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
-                    <div class="task-header" style="align-items: center; gap: 12px;">
-                        <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="task-header client-header" style="align-items: center; gap: 12px;">
+                        <div style="display:flex; align-items:center; gap:12px; flex: 1;">
                             <div style="position:relative; width:36px; height:36px; border-radius:50%; background:${c.color}; color:#fff; display:flex; align-items:center; justify-content:center;">
                                 <i class="fas fa-${c.icon}"></i>
                                 ${c.assigned ? '<span style="position:absolute; right:-4px; bottom:-4px; background:#2ecc71; color:#fff; border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 0 2px #fff;"><i class="fas fa-check" style="font-size:10px;"></i></span>' : ''}
                             </div>
-                            <div class="task-title">${escapeHtml(c.name)}
-                                ${clientsMeta[c.key] && clientsMeta[c.key].notes ? `<div style=\"color: var(--light-text); font-size: 0.9rem; margin-top: 5px; line-height: 1.4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 400;\">${escapeHtml(clientsMeta[c.key].notes)}</div>` : ''}
+                            <div class="task-title" style="flex: 1;">
+                                ${escapeHtml(c.name)}
+                                ${clientsMeta[c.key] && clientsMeta[c.key].notes ? `<div style="color: var(--light-text); font-size: 0.9rem; margin-top: 5px; line-height: 1.4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 400;">${escapeHtml(clientsMeta[c.key].notes)}</div>` : ''}
+                                ${c.archived ? `<span class=\"client-archived-badge\"><i class=\"fas fa-box-archive\"></i> Archived</span>` : ''}
                             </div>
                         </div>
                     </div>
+                    ${tasksHTML}
                 </div>
-            `).join('');
+                `;
+            }).join('');
 
             initializeClientsSortable();
         }
@@ -3757,7 +3895,7 @@
                 dragClass: 'sortable-drag',
                 animation: 150,
                 easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-                filter: '.btn, .btn *, .task-control-btn, .task-control-btn *',
+                filter: '.btn, .btn *, .task-control-btn, .task-control-btn *, .client-tasks-list, .client-tasks-list *',
                 preventOnFilter: false,
                 onEnd: function() {
                     const items = list.querySelectorAll('[data-client-key]');
@@ -3772,11 +3910,120 @@
             });
         }
 
+        function toggleClientExpansion(clientKey) {
+            const clientItem = document.querySelector(`[data-client-key="${clientKey}"]`);
+            if (!clientItem) return;
+            
+            const tasksList = clientItem.querySelector('.client-tasks-list');
+            const expandIcon = clientItem.querySelector('.client-expand-icon');
+            
+            if (!tasksList) return;
+            
+            const isExpanded = tasksList.style.display !== 'none';
+            const sh = tasksList.scrollHeight;
+            const computed = getComputedStyle(tasksList);
+            const mh = computed.maxHeight;
+            const op = computed.opacity;
+            console.log('[client-expand]', { clientKey, isExpanded, scrollHeight: sh, maxHeight: mh, opacity: op, time: performance.now().toFixed(2) });
+            
+            if (isExpanded) {
+                // Collapse
+                const startHeight = tasksList.scrollHeight;
+                console.log('[client-expand] collapse start', { startHeight });
+                tasksList.style.maxHeight = startHeight + 'px';
+                requestAnimationFrame(() => {
+                    tasksList.style.maxHeight = '0';
+                    tasksList.style.opacity = '0';
+                });
+                const onCollapseEnd = (e) => {
+                    if (e.propertyName !== 'max-height') return;
+                    tasksList.removeEventListener('transitionend', onCollapseEnd);
+                    console.log('[client-expand] collapse end', { time: performance.now().toFixed(2) });
+                    tasksList.style.display = 'none';
+                };
+                tasksList.addEventListener('transitionend', onCollapseEnd);
+                if (expandIcon) {
+                    expandIcon.style.transform = 'rotate(0deg)';
+                }
+            } else {
+                // Expand
+                tasksList.style.display = 'block';
+                tasksList.style.maxHeight = '0';
+                tasksList.style.opacity = '0';
+                requestAnimationFrame(() => {
+                    const target = tasksList.scrollHeight;
+                    console.log('[client-expand] expand target', { target });
+                    tasksList.style.maxHeight = target + 'px';
+                    tasksList.style.opacity = '1';
+                });
+                const onExpandEnd = (e) => {
+                    if (e.propertyName !== 'max-height') return;
+                    tasksList.removeEventListener('transitionend', onExpandEnd);
+                    console.log('[client-expand] expand end', { finalScrollHeight: tasksList.scrollHeight, time: performance.now().toFixed(2) });
+                    tasksList.style.maxHeight = 'none';
+                };
+                tasksList.addEventListener('transitionend', onExpandEnd);
+                if (expandIcon) {
+                    expandIcon.style.transform = 'rotate(180deg)';
+                }
+            }
+        }
+
+        function navigateToTask(taskId, isCompleted) {
+            // Switch to the appropriate tab
+            const targetTab = isCompleted ? 'completed' : 'pending';
+            switchTab(targetTab);
+            
+            // Wait for the tab to render, then scroll to and highlight the task
+            setTimeout(() => {
+                const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                if (taskElement) {
+                    taskElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // Add a highlight effect
+                    taskElement.style.transition = 'all 0.3s ease';
+                    taskElement.style.background = 'linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(155, 89, 182, 0.1))';
+                    taskElement.style.transform = 'scale(1.02)';
+                    
+                    setTimeout(() => {
+                        taskElement.style.background = '';
+                        taskElement.style.transform = '';
+                    }, 1500);
+                }
+            }, 100);
+        }
+
         function toggleAssignClient(key) {
             clientsMeta[key] = clientsMeta[key] || {};
             clientsMeta[key].assigned = !clientsMeta[key].assigned;
+            // Reset archived if assigning
+            if (clientsMeta[key].assigned) clientsMeta[key].archived = false;
             saveClientsMeta();
             persistLog('clientsMeta.toggleAssigned', { key, assigned: clientsMeta[key].assigned });
+            if (currentTab === 'clients') renderClients();
+        }
+
+        function cycleClientState(key) {
+            clientsMeta[key] = clientsMeta[key] || {};
+            const meta = clientsMeta[key];
+            const prev = { assigned: !!meta.assigned, archived: !!meta.archived };
+            // Sequence: not assigned && not archived -> assigned -> archived -> unassigned (still archived) -> unarchived (back to not assigned)
+            if (!meta.assigned && !meta.archived) {
+                // Assign to me
+                meta.assigned = true;
+                meta.archived = false;
+            } else if (meta.assigned && !meta.archived) {
+                // Archive (still assigned)
+                meta.archived = true;
+            } else if (meta.assigned && meta.archived) {
+                // Unassign from me (remain archived)
+                meta.assigned = false;
+            } else if (!meta.assigned && meta.archived) {
+                // Unarchive (becomes visible, still unassigned)
+                meta.archived = false;
+            }
+            saveClientsMeta();
+            persistLog('clientsMeta.cycleState', { key, prev, next: { assigned: meta.assigned, archived: meta.archived } });
             if (currentTab === 'clients') renderClients();
         }
 
