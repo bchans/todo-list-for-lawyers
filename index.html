@@ -1305,7 +1305,7 @@
                 </div>
                 
                 <div style="margin-top: 15px; text-align: center; font-size: 11px; color: #999; opacity: 0.7;">
-                    <span id="appVersion">v1.1.1</span> • Built with privacy in mind
+                    <span id="appVersion">v1.1.2</span> • Built with privacy in mind
                 </div>
             </div>
         </div>
@@ -1449,7 +1449,7 @@
 
     <script>
         // App version
-        const APP_VERSION = 'v1.1.1';
+        const APP_VERSION = 'v1.1.2';
         
         // Global variables
         let tasks = [];
@@ -2044,6 +2044,17 @@
             switchTab('pending');
             if (overdueOnly) {
                 const filtered = getFilteredTasks().filter(t => t.reminderDateTime && new Date(t.reminderDateTime) < new Date() && !t.completed);
+                if (filtered.length === 0) {
+                    const taskList = document.getElementById('taskList');
+                    taskList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>No overdue tasks</h3>
+                        <p>You're all caught up. Nothing is overdue.</p>
+                    </div>
+                    `;
+                    return;
+                }
                 displayTasks(filtered, true);
             }
         }
@@ -2318,42 +2329,22 @@
             // Sort tasks based on new ordering system
             const sortedTasks = tasksToShow.sort((a, b) => {
                 if (currentTab === 'pending') {
-                    // If user has manually ordered tasks, respect that order
-                    if (a.customOrder !== undefined && b.customOrder !== undefined) {
-                        return a.customOrder - b.customOrder;
-                    }
-                    
-                    // If only one has custom order, prioritize it
-                    if (a.customOrder !== undefined && b.customOrder === undefined) {
-                        return -1;
-                    }
-                    if (b.customOrder !== undefined && a.customOrder === undefined) {
-                        return 1;
-                    }
-                    
-                    // Default sorting: tasks with reminder dates first (closest first), then tasks without reminders by creation date
+                    // Respect manual drag order only when customOrder is a number
+                    const aHasOrder = typeof a.customOrder === 'number';
+                    const bHasOrder = typeof b.customOrder === 'number';
+                    if (aHasOrder && bHasOrder) return a.customOrder - b.customOrder;
+                    if (aHasOrder && !bHasOrder) return -1;
+                    if (bHasOrder && !aHasOrder) return 1;
+
+                    // Default: reminders first (closest first), otherwise newest created first
                     const aHasReminder = a.reminderDateTime && !a.completed;
                     const bHasReminder = b.reminderDateTime && !b.completed;
-                    
-                    if (aHasReminder && bHasReminder) {
-                        // Both have reminders - sort by reminder date (closest first)
-                        return new Date(a.reminderDateTime) - new Date(b.reminderDateTime);
-                    }
-                    
-                    if (aHasReminder && !bHasReminder) {
-                        // A has reminder, B doesn't - A comes first
-                        return -1;
-                    }
-                    
-                    if (!aHasReminder && bHasReminder) {
-                        // B has reminder, A doesn't - B comes first
-                        return 1;
-                    }
-                    
-                    // Neither has reminder - sort by creation date (newest first)
+                    if (aHasReminder && bHasReminder) return new Date(a.reminderDateTime) - new Date(b.reminderDateTime);
+                    if (aHasReminder && !bHasReminder) return -1;
+                    if (!aHasReminder && bHasReminder) return 1;
                     return new Date(b.createdAt) - new Date(a.createdAt);
                 } else {
-                    // Sort completed tasks by completion date (newest first)
+                    // Completed: newest completion first
                     return new Date(b.completedAt) - new Date(a.completedAt);
                 }
             });
@@ -2703,8 +2694,17 @@
 
         // Notifications and reminders
         function setupNotifications() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
+            if (!('Notification' in window)) return;
+            try {
+                if (Notification.permission === 'default') {
+                    const requestOnce = () => {
+                        try { Notification.requestPermission().catch(() => {}); } catch (e) {}
+                        document.removeEventListener('click', requestOnce);
+                    };
+                    document.addEventListener('click', requestOnce, { once: true });
+                }
+            } catch (e) {
+                // Ignore
             }
         }
 
