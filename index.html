@@ -3803,8 +3803,8 @@
             taskList.innerHTML = ordered.map(c => {
                 // Get tasks for this client
                 const clientTasks = tasks.filter(t => t.customer === c.name);
-                const pendingTasks = clientTasks.filter(t => !t.completed);
-                const completedTasks = clientTasks.filter(t => t.completed);
+                const pendingTasks = clientTasks.filter(t => !t.completed).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                const completedTasks = clientTasks.filter(t => t.completed).sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
                 const totalTasks = clientTasks.length;
                 
                 // Generate task list HTML
@@ -3912,61 +3912,119 @@
 
         function toggleClientExpansion(clientKey) {
             const clientItem = document.querySelector(`[data-client-key="${clientKey}"]`);
-            if (!clientItem) return;
+            console.log('[client-expand] toggleClientExpansion called', { clientKey, found: !!clientItem });
+            
+            if (!clientItem) {
+                console.warn('[client-expand] clientItem not found for key:', clientKey);
+                return;
+            }
             
             const tasksList = clientItem.querySelector('.client-tasks-list');
             const expandIcon = clientItem.querySelector('.client-expand-icon');
             
-            if (!tasksList) return;
+            console.log('[client-expand] elements found', { 
+                tasksList: !!tasksList, 
+                expandIcon: !!expandIcon 
+            });
             
-            const isExpanded = tasksList.style.display !== 'none';
-            const sh = tasksList.scrollHeight;
-            const computed = getComputedStyle(tasksList);
-            const mh = computed.maxHeight;
-            const op = computed.opacity;
-            console.log('[client-expand]', { clientKey, isExpanded, scrollHeight: sh, maxHeight: mh, opacity: op, time: performance.now().toFixed(2) });
+            if (!tasksList) {
+                console.warn('[client-expand] tasksList not found');
+                return;
+            }
+            
+            // Check current state based on display property
+            const isExpanded = tasksList.style.display !== 'none' && tasksList.style.display !== '';
+            const currentDisplay = tasksList.style.display;
+            const currentMaxHeight = tasksList.style.maxHeight;
+            const currentOpacity = tasksList.style.opacity;
+            const scrollHeight = tasksList.scrollHeight;
+            
+            console.log('[client-expand] current state', { 
+                isExpanded, 
+                currentDisplay, 
+                currentMaxHeight, 
+                currentOpacity, 
+                scrollHeight,
+                time: performance.now().toFixed(2) 
+            });
             
             if (isExpanded) {
-                // Collapse
+                // Collapse with animation
+                console.log('[client-expand] COLLAPSING...');
+                
+                // First, set current height explicitly
                 const startHeight = tasksList.scrollHeight;
-                console.log('[client-expand] collapse start', { startHeight });
                 tasksList.style.maxHeight = startHeight + 'px';
+                tasksList.style.opacity = '1';
+                
+                console.log('[client-expand] collapse - set initial height', { startHeight });
+                
+                // Force reflow to ensure the browser processes the height change
+                tasksList.offsetHeight;
+                
+                // Then animate to 0
                 requestAnimationFrame(() => {
+                    console.log('[client-expand] collapse - animating to 0');
                     tasksList.style.maxHeight = '0';
                     tasksList.style.opacity = '0';
                 });
+                
                 const onCollapseEnd = (e) => {
                     if (e.propertyName !== 'max-height') return;
                     tasksList.removeEventListener('transitionend', onCollapseEnd);
-                    console.log('[client-expand] collapse end', { time: performance.now().toFixed(2) });
+                    console.log('[client-expand] collapse - transition ended, hiding element');
                     tasksList.style.display = 'none';
+                    // Keep maxHeight and opacity at 0 for next expansion
                 };
+                
                 tasksList.addEventListener('transitionend', onCollapseEnd);
+                
+                // Rotate icon back
                 if (expandIcon) {
                     expandIcon.style.transform = 'rotate(0deg)';
                 }
             } else {
-                // Expand
+                // Expand with animation
+                console.log('[client-expand] EXPANDING...');
+                
+                // Show the element first
                 tasksList.style.display = 'block';
+                
+                // Reset to collapsed state
                 tasksList.style.maxHeight = '0';
                 tasksList.style.opacity = '0';
+                
+                // Force reflow to ensure display:block is processed
+                tasksList.offsetHeight;
+                
+                // Get the target height after element is visible
+                const targetHeight = tasksList.scrollHeight;
+                console.log('[client-expand] expand - target height', { targetHeight });
+                
+                // Animate to full height
                 requestAnimationFrame(() => {
-                    const target = tasksList.scrollHeight;
-                    console.log('[client-expand] expand target', { target });
-                    tasksList.style.maxHeight = target + 'px';
+                    console.log('[client-expand] expand - animating to', targetHeight);
+                    tasksList.style.maxHeight = targetHeight + 'px';
                     tasksList.style.opacity = '1';
                 });
+                
                 const onExpandEnd = (e) => {
                     if (e.propertyName !== 'max-height') return;
                     tasksList.removeEventListener('transitionend', onExpandEnd);
-                    console.log('[client-expand] expand end', { finalScrollHeight: tasksList.scrollHeight, time: performance.now().toFixed(2) });
+                    console.log('[client-expand] expand - transition ended, removing maxHeight constraint');
+                    // Remove maxHeight constraint so content can grow if needed
                     tasksList.style.maxHeight = 'none';
                 };
+                
                 tasksList.addEventListener('transitionend', onExpandEnd);
+                
+                // Rotate icon down
                 if (expandIcon) {
                     expandIcon.style.transform = 'rotate(180deg)';
                 }
             }
+            
+            console.log('[client-expand] toggleClientExpansion completed');
         }
 
         function navigateToTask(taskId, isCompleted) {
