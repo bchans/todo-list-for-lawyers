@@ -1,4 +1,47 @@
 <!DOCTYPE html>
+<!-- 
+================================================================================
+OFFLINE-FIRST APPLICATION - CRITICAL DESIGN REQUIREMENTS
+================================================================================
+This application MUST remain fully functional offline after initial load.
+
+KEY REQUIREMENTS FOR ALL FUTURE CHANGES:
+1. ALL user data (tasks, clients, labels, workflows, settings) MUST be saved 
+   ONLY in browser localStorage - NEVER send to external servers
+2. NO external API calls for core functionality - everything must work offline
+3. All data persistence must use localStorage.setItem/getItem only
+4. External CDN resources (Font Awesome, SortableJS) may fail offline but 
+   core functionality should degrade gracefully
+5. Privacy-first: All data stays on user's device - no cloud sync, no analytics
+6. Test offline functionality: Load page once online, then disconnect and verify
+   all features still work
+
+BACKWARDS COMPATIBILITY - CRITICAL:
+When adding new features or data structures, ALWAYS ensure backwards compatibility:
+- Import functions MUST gracefully handle missing fields (clientsMeta, clientLabels, 
+  simpleLabels, workflows, etc.)
+- Older export files without new fields should import successfully
+- New properties should be optional with sensible defaults
+- Always check if properties exist before accessing them (use optional chaining or 
+  existence checks)
+- Test imports with old export files before releasing changes
+- When adding new localStorage keys, ensure old data still loads correctly
+
+Current localStorage keys:
+- legalTasks, legalCustomers, legalClientsMeta, legalClientLabels, legalSimpleLabels,
+  legalSettings, legalExportLog
+
+DO NOT ADD:
+- External API calls for data storage
+- Cloud sync features
+- Analytics tracking
+- Server-side data storage
+- Breaking changes to data structures without migration logic
+
+The app should work completely offline after first load, with all data stored
+locally on the user's PC for full privacy and offline access.
+================================================================================
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -508,6 +551,578 @@
             flex: 1;
             font-size: 0.95rem;
             color: var(--dark-text);
+        }
+
+        /* Client timeline */
+        .client-timeline {
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+            overflow-x: auto;
+            padding: 10px 4px;
+        }
+
+        .client-timeline.builder-preview {
+            min-height: 70px;
+        }
+
+        .client-timeline::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .client-timeline::-webkit-scrollbar-thumb {
+            background: rgba(52, 152, 219, 0.4);
+            border-radius: 999px;
+        }
+
+        .timeline-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            min-width: 140px;
+            flex-shrink: 0;
+        }
+
+        .timeline-phase {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: #e0e6ed;
+            color: var(--dark-text);
+            cursor: pointer;
+            transition: var(--transition);
+            border: 1px solid transparent;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .timeline-phase.is-past {
+            background: var(--success-color);
+            color: var(--white);
+        }
+
+        .timeline-phase.is-current {
+            background: var(--secondary-color);
+            color: var(--white);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .timeline-phase.is-future {
+            background: #edf2f7;
+            color: var(--light-text);
+        }
+
+        .timeline-track {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+        }
+
+        .timeline-subphase {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #e0e6ed;
+            color: var(--dark-text);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            opacity: 0.9;
+        }
+
+        .timeline-subphase.is-past {
+            background: rgba(46, 204, 113, 0.9);
+            color: var(--white);
+        }
+
+        .timeline-subphase.is-current {
+            background: var(--secondary-color);
+            color: var(--white);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .timeline-subphase.is-future {
+            background: #f3f4f6;
+            color: var(--light-text);
+        }
+
+        .timeline-column-connector,
+        .timeline-track-connector {
+            height: 2px;
+            background: #d2d6dc;
+            flex-shrink: 0;
+        }
+
+        .timeline-column-connector.is-past,
+        .timeline-track-connector.is-past {
+            background: var(--success-color);
+        }
+
+        .timeline-column-connector {
+            width: 36px;
+            align-self: center;
+        }
+
+        .timeline-track-connector {
+            width: 22px;
+        }
+
+        /* Label builder */
+        .label-builder-section {
+            margin-top: 20px;
+        }
+
+        .label-builder-section label {
+            font-weight: 600;
+        }
+
+        .label-builder-hint {
+            font-size: 0.85rem;
+            color: var(--light-text);
+            margin-top: 4px;
+        }
+
+        .label-builder-canvas {
+            border: 1px solid #e0e6ed;
+            border-radius: 14px;
+            padding: 16px;
+            margin-top: 14px;
+            background: var(--white);
+            min-height: 130px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .builder-scroll {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+
+        .builder-scroll::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .builder-scroll::-webkit-scrollbar-thumb {
+            background: rgba(52, 152, 219, 0.4);
+            border-radius: 999px;
+        }
+
+        .label-builder-empty {
+            text-align: center;
+            color: var(--light-text);
+            font-size: 0.9rem;
+            padding: 20px 0;
+        }
+
+        .label-builder-empty button {
+            margin-top: 10px;
+            border: 1px dashed var(--secondary-color);
+            background: transparent;
+            color: var(--secondary-color);
+            border-radius: 999px;
+            padding: 6px 18px;
+            cursor: pointer;
+        }
+
+        .builder-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            min-width: 165px;
+        }
+
+        .builder-phase-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: #edf2f7;
+            border: 1px solid transparent;
+            box-shadow: var(--shadow-soft);
+            transition: var(--transition);
+            cursor: pointer;
+            min-height: 42px;
+        }
+
+        .builder-phase-chip.is-active {
+            border-color: var(--secondary-color);
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .builder-phase-chip.is-sub {
+            background: #f6f8fb;
+            font-size: 0.8rem;
+            color: var(--dark-text);
+        }
+
+        .builder-phase-chip.is-sub .builder-phase-input {
+            font-size: 0.8rem;
+            color: var(--dark-text);
+        }
+
+        .builder-phase-input {
+            border: none;
+            background: transparent;
+            font-weight: 600;
+            font-size: 0.9rem;
+            width: 120px;
+        }
+
+        .builder-phase-input::placeholder {
+            color: var(--light-text);
+            font-weight: 400;
+        }
+
+        .builder-phase-input:focus {
+            outline: none;
+        }
+
+        .builder-chip-actions {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .builder-chip-actions button {
+            border: none;
+            background: rgba(255, 255, 255, 0.7);
+            min-width: 34px;
+            height: 30px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--secondary-color);
+            cursor: pointer;
+            transition: var(--transition);
+            padding: 0 12px;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .builder-chip-actions button:hover {
+            background: var(--secondary-color);
+            color: var(--white);
+        }
+
+        .builder-chip-actions button .builder-template-chevron {
+            font-size: 0.65rem;
+            transition: transform 0.2s ease;
+        }
+
+        .builder-chip-actions button.builder-template-btn.is-open .builder-template-chevron {
+            transform: rotate(180deg);
+        }
+
+        .builder-template-chevron {
+            font-size: 0.65rem;
+            margin-left: 2px;
+        }
+
+        .builder-chip-actions button.delete {
+            color: var(--accent-color);
+            background: rgba(231, 76, 60, 0.15);
+        }
+
+        .builder-chip-actions button.delete:hover {
+            background: var(--accent-color);
+            color: var(--white);
+        }
+
+        .builder-phase-chip.expanded {
+            background: var(--white);
+            border-color: var(--secondary-color);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .builder-phase-block {
+            width: 100%;
+        }
+
+        .builder-sub-track {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .builder-sub-track.level-1 {
+            margin-top: 8px;
+        }
+
+        .builder-sub-track.level-2 {
+            margin-top: 6px;
+            padding-left: 10px;
+        }
+
+        .builder-add-chip {
+            border: 1px dashed var(--secondary-color);
+            background: transparent;
+            color: var(--secondary-color);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .builder-add-chip.small {
+            padding: 4px 10px;
+            font-size: 0.75rem;
+        }
+
+        .builder-add-chip:hover {
+            background: rgba(52, 152, 219, 0.08);
+        }
+
+        .builder-phase-tasks {
+            width: 100%;
+            background: rgba(52, 152, 219, 0.04);
+            border: 1px solid #e0e6ed;
+            border-radius: 12px;
+            margin-top: 10px;
+            padding: 0 12px 12px;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            display: none;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .builder-phase-tasks.show {
+            display: block;
+            opacity: 1;
+        }
+
+        .builder-task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px 0;
+        }
+
+        .builder-empty-tasks {
+            color: var(--light-text);
+            font-size: 0.85rem;
+        }
+
+        .builder-task-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid #e0e6ed;
+            border-radius: 10px;
+            background: var(--white);
+        }
+
+        .builder-task-row input {
+            flex: 1;
+            border: none;
+            background: transparent;
+        }
+
+        .builder-task-row input:focus {
+            outline: none;
+        }
+
+        .builder-task-row button {
+            border: none;
+            border-radius: 8px;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .builder-task-row button.builder-task-confirm {
+            background: rgba(46, 204, 113, 0.2);
+            color: var(--success-color);
+        }
+
+        .builder-task-row button.builder-task-confirm:hover {
+            background: var(--success-color);
+            color: var(--white);
+        }
+
+        .builder-task-row button.builder-task-edit {
+            background: rgba(52, 152, 219, 0.15);
+            color: var(--secondary-color);
+        }
+
+        .builder-task-row button.builder-task-edit:hover {
+            background: var(--secondary-color);
+            color: var(--white);
+        }
+
+        .builder-task-row button.builder-task-delete {
+            background: rgba(231, 76, 60, 0.15);
+            color: var(--accent-color);
+        }
+
+        .builder-task-row button.builder-task-delete:hover {
+            background: var(--accent-color);
+            color: var(--white);
+        }
+
+        .builder-task-row.confirmed {
+            animation: pulseConfirm 0.45s ease;
+        }
+
+        @keyframes pulseConfirm {
+            0% { box-shadow: 0 0 0 rgba(46, 204, 113, 0); }
+            50% { box-shadow: 0 0 12px rgba(46, 204, 113, 0.4); }
+            100% { box-shadow: 0 0 0 rgba(46, 204, 113, 0); }
+        }
+
+        .builder-add-task-btn {
+            border: 1px dashed var(--secondary-color);
+            background: transparent;
+            color: var(--secondary-color);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        /* Manage labels modal */
+        .labels-modal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 12px;
+            background: var(--light-bg);
+            border-radius: 10px;
+        }
+
+        .labels-modal-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .labels-modal-list::-webkit-scrollbar-thumb {
+            background: rgba(52, 152, 219, 0.4);
+            border-radius: 999px;
+        }
+
+        .labels-modal-empty {
+            text-align: center;
+            color: var(--light-text);
+            font-size: 0.9rem;
+            padding: 30px 10px;
+        }
+
+        .label-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #e0e6ed;
+            background: var(--white);
+            box-shadow: var(--shadow-soft);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .label-card:hover {
+            border-color: var(--secondary-color);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .label-card.selected {
+            border-color: var(--secondary-color);
+            background: rgba(52, 152, 219, 0.08);
+        }
+
+        .label-card-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .label-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f4f8;
+            color: var(--secondary-color);
+            font-size: 1rem;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .label-card.selected .label-badge {
+            background: var(--secondary-color);
+            color: var(--white);
+        }
+
+        .label-card-title {
+            font-weight: 600;
+            color: var(--dark-text);
+            font-size: 0.95rem;
+        }
+
+        .label-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--light-text);
+            margin-top: 2px;
+        }
+
+        .label-selected-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(46, 204, 113, 0.15);
+            color: var(--success-color);
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .label-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .label-edit-btn {
+            border: none;
+            background: rgba(52, 152, 219, 0.12);
+            color: var(--secondary-color);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .label-edit-btn:hover {
+            background: var(--secondary-color);
+            color: var(--white);
         }
 
         .client-item:hover {
@@ -1193,6 +1808,84 @@
         </div>
     </div>
 
+    <div class="task-info-modal" id="clientLabelsModal">
+        <div class="task-info-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-project-diagram"></i> Manage Workflows</h3>
+                <button class="task-info-close" onclick="closeClientWorkflows()">&times;</button>
+            </div>
+            <div id="clientLabelsContent">
+                <div class="form-group">
+                    <label>Available Workflows</label>
+                    <div id="labelsList" class="labels-modal-list"></div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-primary" onclick="openCreateLabelModal()" style="flex: 1;">
+                        <i class="fas fa-plus"></i> Create New Workflow
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeClientWorkflows()" style="background: #95a5a6;">
+                        <i class="fas fa-check"></i> Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="quickAddLabelModal">
+        <div class="task-info-content" style="max-width: 500px;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-tag"></i> Add Label</h3>
+                <button class="task-info-close" onclick="closeQuickAddLabel()">&times;</button>
+            </div>
+            <div id="quickAddLabelContent" style="padding: 20px;">
+                <div class="form-group">
+                    <label>Select or Create Label</label>
+                    <div id="quickAddLabelList" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-primary" onclick="createNewSimpleLabel()" style="flex: 1;">
+                        <i class="fas fa-plus"></i> Create New Label
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeQuickAddLabel()" style="background: #95a5a6;">
+                        <i class="fas fa-check"></i> Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-info-modal" id="createLabelModal">
+        <div class="task-info-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="task-info-header">
+                <h3><i class="fas fa-plus-circle"></i> Create Workflow</h3>
+                <button class="task-info-close" onclick="closeCreateLabelModal()">&times;</button>
+            </div>
+            <div id="createLabelContent" style="padding: 20px;">
+                <div class="form-group">
+                    <label for="labelNameInput">Workflow Name *</label>
+                    <input type="text" id="labelNameInput" class="form-control" placeholder="e.g., Criminal Proceedings" required>
+                </div>
+                <div class="form-group label-builder-section">
+                    <label>Phases</label>
+                    <div class="label-builder-hint">Design the proceeding flow inline. Tap the plus bubbles to add phases and sub-phases, then rename them directly inside the timeline.</div>
+                    <div id="labelBuilderCanvas" class="label-builder-canvas">
+                        <div class="label-builder-empty">
+                            Tap the <strong>+ Add phase</strong> bubble to start mapping this proceeding.
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="saveNewLabel()">
+                        <i class="fas fa-save"></i> Save Workflow
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeCreateLabelModal()" style="background: #95a5a6;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="task-info-modal" id="editClientModal">
         <div class="task-info-content" style="max-width: 500px;">
             <div class="task-info-header">
@@ -1466,6 +2159,18 @@
         let clientsMeta = {};
         let myClientsOnly = false;
         let clientsTabEnabled = true;
+        let clientLabels = []; // Global list of available workflows (objects with name, phases, tasks)
+        let simpleLabels = []; // Global list of simple labels (just name and id, independent of workflows)
+        let currentLabelClientKey = null; // Track which client's labels we're managing
+        let editingLabelId = null; // Track which label is being edited
+        let phaseCounter = 0; // Counter for unique phase IDs
+        let labelBuilderPhases = [];
+        let selectedBuilderPhaseId = null;
+        let builderFocusPhaseId = null;
+        let builderFocusTaskKey = null;
+        let builderConfirmFlashKey = null;
+        let builderExpandedPhaseIds = new Set();
+        let builderConfirmedTasks = new Set(); // Track which tasks are saved/confirmed
         let autoExportEnabled = true;
         let autoExportDays = [5]; // Friday by default
         let autoExportTime = '16:00';
@@ -1961,6 +2666,48 @@
                     <div class="task-info-label">Notes</div>
                     <div class="task-info-value">${meta.notes ? escapeHtml(meta.notes) : '<span style="color: var(--light-text)">No notes</span>'}</div>
                 </div>
+                <div class="task-info-item">
+                    <div class="task-info-label">Labels & Workflows</div>
+                    <div class="task-info-value">
+                        ${meta.labelIds && meta.labelIds.length > 0 ? `
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px;">
+                                ${meta.labelIds.map(labelId => {
+                                    const simpleLabel = simpleLabels.find(l => l.id === labelId);
+                                    const workflowLabel = clientLabels.find(l => l.id === labelId);
+                                    
+                                    if (simpleLabel) {
+                                        return `
+                                            <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: var(--secondary-color); color: var(--white); border-radius: 12px; font-size: 0.85rem; font-weight: 500;">
+                                                <i class="fas fa-tag" style="font-size: 0.7rem; margin-right: 4px;"></i>
+                                                ${escapeHtml(simpleLabel.name)}
+                                            </span>
+                                        `;
+                                    } else if (workflowLabel) {
+                                        return `
+                                            <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: #764ba2; color: var(--white); border-radius: 12px; font-size: 0.85rem; font-weight: 500;">
+                                                <i class="fas fa-project-diagram" style="font-size: 0.7rem; margin-right: 4px;"></i>
+                                                ${escapeHtml(workflowLabel.name)}
+                                            </span>
+                                        `;
+                                    }
+                                    return '';
+                                }).join('')}
+                            </div>
+                        ` : '<span style="color: var(--light-text)">No labels or workflows</span>'}
+                    </div>
+                </div>
+                ${meta.currentPhase ? `
+                    <div class="task-info-item">
+                        <div class="task-info-label">Current Phase</div>
+                        <div class="task-info-value">
+                            ${(() => {
+                                const label = clientLabels.find(l => l.id === meta.currentPhase.labelId);
+                                if (!label) return '<span style="color: var(--light-text)">Unknown</span>';
+                                return `<span style="font-weight: 600; color: var(--secondary-color);">${escapeHtml(meta.currentPhase.phasePath ? meta.currentPhase.phasePath.join(' → ') : 'Unknown')}</span>`;
+                            })()}
+                        </div>
+                    </div>
+                ` : ''}
             `;
             modal.classList.add('show');
         }
@@ -2039,6 +2786,741 @@
             assignedBtn.title = isAssigned ? 'Unassign from me' : 'Assign to me';
             assignedBtn.innerHTML = isAssigned ? '<i class=\"fas fa-user-minus\"></i>' : '<i class=\"fas fa-user-check\"></i>';
         }
+
+        function refreshQuickAddLabelList() {
+            if (!currentLabelClientKey) return;
+            const decodedKey = currentLabelClientKey.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            const meta = clientsMeta[decodedKey] || {};
+            const clientLabelIds = meta.labelIds || [];
+            
+            const labelsList = document.getElementById('quickAddLabelList');
+            labelsList.innerHTML = '';
+            
+            if (simpleLabels.length === 0) {
+                labelsList.innerHTML = '<div class="labels-modal-empty">No labels available. Create one below.</div>';
+            } else {
+                simpleLabels.forEach(label => {
+                    const isSelected = clientLabelIds.includes(label.id);
+                    const labelElement = document.createElement('div');
+                    labelElement.className = `label-card${isSelected ? ' selected' : ''}`;
+                    labelElement.style.cursor = 'pointer';
+                    labelElement.innerHTML = `
+                        <div class="label-card-left">
+                            <div class="label-badge">
+                                <i class="fas fa-tag"></i>
+                            </div>
+                            <div>
+                                <div class="label-card-title">${escapeHtml(label.name)}</div>
+                                ${isSelected ? '<div class="label-card-meta"><span class="label-selected-pill"><i class="fas fa-check"></i> Selected</span></div>' : ''}
+                            </div>
+                        </div>
+                    `;
+                    labelElement.onclick = () => {
+                        toggleClientSimpleLabel(decodedKey, label.id);
+                        refreshQuickAddLabelList(); // Refresh to show updated state
+                    };
+                    labelsList.appendChild(labelElement);
+                });
+            }
+        }
+
+        function quickAddLabel(key) {
+            // Decode HTML entities if present (from onclick handler)
+            const decodedKey = key.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            const client = getClientsArray().find(c => c.key === decodedKey);
+            if (!client) return;
+            currentLabelClientKey = key; // Store the original encoded key
+            refreshQuickAddLabelList();
+            document.getElementById('quickAddLabelModal').classList.add('show');
+        }
+
+        function createNewSimpleLabel() {
+            const labelName = prompt('Enter label name:');
+            if (!labelName || !labelName.trim()) return;
+            
+            const trimmedName = labelName.trim();
+            
+            // Check for duplicate names
+            if (simpleLabels.some(l => l.name === trimmedName)) {
+                showNotification('A label with this name already exists', 'error');
+                return;
+            }
+            
+            const newLabel = {
+                id: `simple_label_${Date.now()}`,
+                name: trimmedName
+            };
+            
+            simpleLabels.push(newLabel);
+            saveSimpleLabels();
+            persistLog('simpleLabels.create', { labelName: trimmedName });
+            
+            // Refresh the quick add modal list
+            refreshQuickAddLabelList();
+            
+            showNotification(`Label "${trimmedName}" created successfully!`, 'success');
+        }
+
+        function toggleClientSimpleLabel(key, labelId) {
+            // Decode HTML entities if present (from onclick handler)
+            const decodedKey = key.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            clientsMeta[decodedKey] = clientsMeta[decodedKey] || {};
+            clientsMeta[decodedKey].labelIds = clientsMeta[decodedKey].labelIds || [];
+            const labelIds = clientsMeta[decodedKey].labelIds;
+            const index = labelIds.indexOf(labelId);
+            
+            if (index > -1) {
+                labelIds.splice(index, 1);
+            } else {
+                labelIds.push(labelId);
+            }
+            
+            saveClientsMeta();
+            persistLog('simpleLabels.toggle', { key: decodedKey, labelId, labelIds: clientsMeta[decodedKey].labelIds });
+            
+            // Refresh the label list in the modal
+            refreshQuickAddLabelList();
+            
+            // Refresh client display
+            if (currentTab === 'clients') renderClients();
+            
+            const label = simpleLabels.find(l => l.id === labelId);
+            showNotification(`Label "${label ? label.name : labelId}" ${index > -1 ? 'removed' : 'added'}`, 'success');
+        }
+
+        function saveSimpleLabels() {
+            try {
+                localStorage.setItem('legalSimpleLabels', JSON.stringify(simpleLabels));
+                persistLog('simpleLabels.save', { count: simpleLabels.length });
+            } catch (e) {
+                console.error('Error saving simple labels', e);
+                persistLog('simpleLabels.save.error', { error: String(e) });
+            }
+        }
+
+        function loadSimpleLabels() {
+            try {
+                const saved = localStorage.getItem('legalSimpleLabels');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    simpleLabels = Array.isArray(parsed) ? parsed : [];
+                } else {
+                    simpleLabels = [];
+                }
+                persistLog('simpleLabels.load', { count: simpleLabels.length });
+            } catch (e) {
+                console.error('Error loading simple labels', e);
+                simpleLabels = [];
+                persistLog('simpleLabels.load.error', { error: String(e) });
+            }
+        }
+
+        function closeQuickAddLabel() {
+            document.getElementById('quickAddLabelModal').classList.remove('show');
+        }
+
+        function showClientWorkflows(key) {
+            // Decode HTML entities if present (from onclick handler)
+            const decodedKey = key.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            const client = getClientsArray().find(c => c.key === decodedKey);
+            if (!client) return;
+            currentLabelClientKey = decodedKey;
+            const meta = clientsMeta[decodedKey] || {};
+            const clientLabelIds = meta.labelIds || [];
+            
+            // Render workflows list
+            const labelsList = document.getElementById('labelsList');
+            labelsList.innerHTML = '';
+            labelsList.classList.add('labels-modal-list');
+            
+            if (clientLabels.length === 0) {
+                labelsList.innerHTML = '<div class="labels-modal-empty">No workflows available. Create one below.</div>';
+            } else {
+                clientLabels.forEach(label => {
+                    const isSelected = clientLabelIds.includes(label.id);
+                    const labelElement = document.createElement('div');
+                    labelElement.className = `label-card${isSelected ? ' selected' : ''}`;
+                    const phasesCount = label.phases ? label.phases.length : 0;
+                    labelElement.innerHTML = `
+                        <div class="label-card-left">
+                            <div class="label-badge">
+                                <i class="fas fa-project-diagram"></i>
+                            </div>
+                            <div>
+                                <div class="label-card-title">${escapeHtml(label.name)}</div>
+                                <div class="label-card-meta">
+                                    <span>${phasesCount} phase${phasesCount !== 1 ? 's' : ''}</span>
+                                    ${isSelected ? '<span class="label-selected-pill"><i class="fas fa-check"></i> Selected</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="label-card-actions">
+                            <button class="label-edit-btn" onclick="event.stopPropagation(); editExistingLabel('${label.id}')">
+                                <i class="fas fa-pen"></i> Edit
+                            </button>
+                        </div>
+                    `;
+                    labelElement.onclick = () => toggleClientLabel(decodedKey, label.id);
+                    labelsList.appendChild(labelElement);
+                });
+            }
+            
+            document.getElementById('clientLabelsModal').classList.add('show');
+        }
+
+        function closeClientWorkflows() {
+            currentLabelClientKey = null;
+            document.getElementById('clientLabelsModal').classList.remove('show');
+        }
+
+        function toggleClientLabel(key, labelId) {
+            // Decode HTML entities if present (from onclick handler)
+            const decodedKey = key.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            clientsMeta[decodedKey] = clientsMeta[decodedKey] || {};
+            clientsMeta[decodedKey].labelIds = clientsMeta[decodedKey].labelIds || [];
+            const labelIds = clientsMeta[decodedKey].labelIds;
+            const index = labelIds.indexOf(labelId);
+            
+            if (index > -1) {
+                labelIds.splice(index, 1);
+                // Also clear current phase if it was for this label
+                if (clientsMeta[decodedKey].currentPhase && clientsMeta[decodedKey].currentPhase.labelId === labelId) {
+                    delete clientsMeta[decodedKey].currentPhase;
+                }
+            } else {
+                labelIds.push(labelId);
+                // Auto-assign first phase when label is added
+                const label = clientLabels.find(l => l.id === labelId);
+                if (label && label.phases && label.phases.length > 0) {
+                    const getFirstPhase = (phases, path = []) => {
+                        if (phases.length === 0) return null;
+                        const firstPhase = phases[0];
+                        const currentPath = [...path, firstPhase.name];
+                        return {
+                            id: firstPhase.id,
+                            name: firstPhase.name,
+                            path: currentPath
+                        };
+                    };
+                    const firstPhase = getFirstPhase(label.phases);
+                    if (firstPhase) {
+                        clientsMeta[decodedKey].currentPhase = {
+                            labelId: labelId,
+                            phaseId: firstPhase.id,
+                            phasePath: firstPhase.path
+                        };
+                    }
+                }
+            }
+            
+            saveClientsMeta();
+            persistLog('clientLabels.toggle', { key: decodedKey, labelId, labelIds: clientsMeta[decodedKey].labelIds });
+            
+            // Refresh the workflows modal if open
+            if (currentLabelClientKey === decodedKey) {
+                showClientWorkflows(decodedKey);
+            }
+            
+            // Refresh client display
+            if (currentTab === 'clients') renderClients();
+            
+            const label = clientLabels.find(l => l.id === labelId);
+            showNotification(`Label "${label ? label.name : labelId}" ${index > -1 ? 'removed' : 'added'}`, 'success');
+        }
+
+        function openCreateLabelModal() {
+            editingLabelId = null;
+            phaseCounter = 0;
+            document.getElementById('labelNameInput').value = '';
+            document.querySelector('#createLabelModal h3').innerHTML = '<i class="fas fa-plus-circle"></i> Create Workflow';
+            initLabelBuilder([]);
+            document.getElementById('createLabelModal').classList.add('show');
+        }
+
+        function editExistingLabel(labelId) {
+            const label = clientLabels.find(l => l.id === labelId);
+            if (!label) return;
+            
+            editingLabelId = labelId;
+            phaseCounter = 0;
+            document.getElementById('labelNameInput').value = label.name;
+            document.querySelector('#createLabelModal h3').innerHTML = '<i class="fas fa-edit"></i> Edit Workflow';
+            initLabelBuilder(label.phases || []);
+            document.getElementById('createLabelModal').classList.add('show');
+        }
+
+        function closeCreateLabelModal() {
+            editingLabelId = null;
+            initLabelBuilder([]);
+            document.getElementById('createLabelModal').classList.remove('show');
+        }
+
+        function saveNewLabel() {
+            const labelName = document.getElementById('labelNameInput').value.trim();
+            if (!labelName) {
+                showNotification('Please enter a workflow name', 'error');
+                return;
+            }
+
+            // Check for duplicate names
+            if (clientLabels.some(l => l.name === labelName && l.id !== editingLabelId)) {
+                showNotification('A workflow with this name already exists', 'error');
+                return;
+            }
+
+            const phaseTree = normalizePhaseTree(labelBuilderPhases);
+            if (phaseTree.length === 0) {
+                showNotification('Please add at least one phase', 'error');
+                return;
+            }
+            labelBuilderPhases = clonePhaseTree(phaseTree);
+
+            if (editingLabelId) {
+                // Update existing label
+                const labelIndex = clientLabels.findIndex(l => l.id === editingLabelId);
+                if (labelIndex !== -1) {
+                    clientLabels[labelIndex] = {
+                        ...clientLabels[labelIndex],
+                        name: labelName,
+                        phases: phaseTree
+                    };
+                }
+            } else {
+                // Create new label
+                const newLabel = {
+                    id: `label_${Date.now()}`,
+                    name: labelName,
+                    phases: phaseTree
+                };
+                clientLabels.push(newLabel);
+            }
+
+            saveClientLabels();
+            persistLog('clientLabels.save', { labelName, phasesCount: phaseTree.length });
+            
+            closeCreateLabelModal();
+            
+            // Refresh workflows modal if open
+            if (currentLabelClientKey) {
+                showClientWorkflows(currentLabelClientKey);
+            }
+            
+            showNotification(`Workflow "${labelName}" ${editingLabelId ? 'updated' : 'created'} successfully!`, 'success');
+        }
+
+        function initLabelBuilder(phases) {
+            labelBuilderPhases = clonePhaseTree(phases);
+            selectedBuilderPhaseId = labelBuilderPhases[0] ? labelBuilderPhases[0].id : null;
+            builderFocusPhaseId = null;
+            builderFocusTaskKey = null;
+            builderExpandedPhaseIds = new Set();
+            builderConfirmedTasks.clear(); // Clear confirmed tasks when initializing builder
+            renderLabelBuilderCanvas();
+        }
+
+        function clonePhaseTree(phases) {
+            return JSON.parse(JSON.stringify(phases || []));
+        }
+
+        function renderLabelBuilderCanvas() {
+            const canvas = document.getElementById('labelBuilderCanvas');
+            if (!canvas) return;
+            if (!labelBuilderPhases.length) {
+                canvas.innerHTML = `
+                    <div class="label-builder-empty">
+                        Tap the <strong>+ Add phase</strong> bubble to start mapping this proceeding.
+                        <div style="margin-top: 12px;">
+                            <button type="button" class="builder-add-chip" onclick="handleAddPhase()">
+                                <i class="fas fa-plus"></i> Add phase
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            const columns = labelBuilderPhases.map((phase, index) => renderBuilderColumn(phase, index)).join('');
+            canvas.innerHTML = `
+                <div class="builder-scroll">
+                    ${columns}
+                    <button type="button" class="builder-add-chip" onclick="handleAddPhase()">
+                        <i class="fas fa-plus"></i> Add phase
+                    </button>
+                </div>
+            `;
+            focusBuilderPhaseInput();
+            focusBuilderTaskInput();
+        }
+
+        function renderBuilderColumn(phase, index) {
+            const column = `
+                <div class="timeline-column builder-column">
+                    ${renderBuilderPhaseBlock(phase, false)}
+                    ${renderBuilderSubTrack(phase.subPhases || [], phase.id, 1)}
+                </div>
+            `;
+            const connector = index < labelBuilderPhases.length - 1 ? '<div class="timeline-column-connector is-future"></div>' : '';
+            return column + connector;
+        }
+
+        function renderBuilderSubTrack(subPhases, parentId, level = 1) {
+            const children = (subPhases || []).map(subPhase => `
+                <div class="builder-column" style="min-width: 140px;">
+                    ${renderBuilderPhaseBlock(subPhase, true)}
+                    ${renderBuilderSubTrack(subPhase.subPhases || [], subPhase.id, level + 1)}
+                </div>
+            `).join('');
+            return `
+                <div class="builder-sub-track level-${level}">
+                    ${children}
+                    <button type="button" class="builder-add-chip small" onclick="handleAddSubPhase('${parentId}')">
+                        <i class="fas fa-plus"></i> Sub-phase
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderBuilderPhaseBlock(phase, isSub) {
+            return `
+                <div class="builder-phase-block" data-phase-block="${phase.id}">
+                    ${renderBuilderPhaseChip(phase, isSub)}
+                    ${renderBuilderTasksContainer(phase)}
+                </div>
+            `;
+        }
+
+        function renderBuilderPhaseChip(phase, isSub) {
+            const isActive = selectedBuilderPhaseId === phase.id;
+            const isExpanded = builderExpandedPhaseIds.has(phase.id);
+            return `
+                <div class="builder-phase-chip ${isSub ? 'is-sub' : ''} ${isActive ? 'is-active' : ''} ${isExpanded ? 'expanded' : ''}" data-phase-chip="${phase.id}" onclick="handleBuilderChipClick('${phase.id}')">
+                    <input type="text" class="builder-phase-input" data-phase-input="${phase.id}" value="${escapeHtml(phase.name || '')}" placeholder="${isSub ? 'Sub-phase name' : 'Phase name'}" onclick="event.stopPropagation();" oninput="handleBuilderPhaseNameInput('${phase.id}', event)" onfocus="handleBuilderInputFocus('${phase.id}')">
+                    <div class="builder-chip-actions">
+                        <button type="button" class="builder-template-btn ${isExpanded ? 'is-open' : ''}" onclick="event.stopPropagation(); toggleBuilderPhaseExpansion('${phase.id}')">
+                            <i class="fas fa-tasks"></i>
+                            <i class="fas fa-chevron-down builder-template-chevron"></i>
+                        </button>
+                        <button type="button" class="delete" onclick="event.stopPropagation(); handleDeletePhase('${phase.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderBuilderTasksContainer(phase) {
+            const isExpanded = builderExpandedPhaseIds.has(phase.id);
+            const tasks = phase.tasks || [];
+            const displayStyle = isExpanded ? 'block' : 'none';
+            const maxHeightStyle = isExpanded ? 'none' : '0';
+            const opacityStyle = isExpanded ? '1' : '0';
+            return `
+                <div class="builder-phase-tasks ${isExpanded ? 'show' : ''}" data-phase-tasks="${phase.id}" style="display:${displayStyle}; max-height:${maxHeightStyle}; opacity:${opacityStyle};">
+                    <div class="builder-task-list">
+                        ${tasks.length ? tasks.map((task, index) => renderBuilderTaskRow(phase.id, task, index)).join('') : '<div class="builder-empty-tasks">No template tasks yet.</div>'}
+                    </div>
+                    <button type="button" class="builder-add-task-btn" onclick="addBuilderTask('${phase.id}')">
+                        <i class="fas fa-tasks"></i> Add template task
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderBuilderTaskRow(phaseId, task, index) {
+            const rowKey = `${phaseId}:${index}`;
+            const shouldFlash = builderConfirmFlashKey === rowKey;
+            if (shouldFlash) builderConfirmFlashKey = null;
+            const isConfirmed = builderConfirmedTasks.has(rowKey);
+            const trimmedTask = (task || '').trim();
+            const isEmpty = !trimmedTask;
+            
+            return `
+                <div class="builder-task-row${shouldFlash ? ' confirmed' : ''}">
+                    <input type="text" 
+                           data-builder-task-input="${phaseId}:${index}" 
+                           value="${escapeHtml(task)}" 
+                           placeholder="Task title" 
+                           ${isConfirmed && !isEmpty ? 'readonly' : ''}
+                           oninput="handleBuilderTaskInput('${phaseId}', ${index}, event)"
+                           style="${isConfirmed && !isEmpty ? 'background: #f6f8fb; cursor: not-allowed;' : ''}">
+                    ${isConfirmed && !isEmpty ? `
+                        <button type="button" class="builder-task-edit" onclick="editBuilderTask('${phaseId}', ${index})" title="Edit task">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    ` : `
+                        <button type="button" class="builder-task-confirm" onclick="confirmBuilderTask('${phaseId}', ${index})" title="Save task">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    `}
+                    <button type="button" class="builder-task-delete" onclick="removeBuilderTask('${phaseId}', ${index})" title="Remove template">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function handleBuilderChipClick(phaseId) {
+            setSelectedBuilderPhase(phaseId, true);
+        }
+
+        function handleBuilderInputFocus(phaseId) {
+            setSelectedBuilderPhase(phaseId, true);
+        }
+
+        function handleAddPhase() {
+            const newPhase = createBlankPhase();
+            labelBuilderPhases.push(newPhase);
+            selectedBuilderPhaseId = newPhase.id;
+            builderFocusPhaseId = newPhase.id;
+            builderExpandedPhaseIds.add(newPhase.id);
+            renderLabelBuilderCanvas();
+        }
+
+        function handleAddSubPhase(parentId) {
+            const parentRef = findPhaseRef(parentId);
+            if (!parentRef) return;
+            parentRef.phase.subPhases = parentRef.phase.subPhases || [];
+            const newPhase = createBlankPhase();
+            parentRef.phase.subPhases.push(newPhase);
+            selectedBuilderPhaseId = newPhase.id;
+            builderFocusPhaseId = newPhase.id;
+            builderExpandedPhaseIds.add(newPhase.id);
+            renderLabelBuilderCanvas();
+        }
+
+        function createBlankPhase() {
+            return {
+                id: `phase_${Date.now()}_${phaseCounter++}`,
+                name: '',
+                tasks: [],
+                subPhases: []
+            };
+        }
+
+        function findPhaseRef(phaseId, phases = labelBuilderPhases, parentPhase = null) {
+            for (let i = 0; i < phases.length; i++) {
+                const phase = phases[i];
+                if (phase.id === phaseId) {
+                    return { phase, collection: phases, index: i, parent: parentPhase };
+                }
+                if (phase.subPhases && phase.subPhases.length > 0) {
+                    const nested = findPhaseRef(phaseId, phase.subPhases, phase);
+                    if (nested) return nested;
+                }
+            }
+            return null;
+        }
+
+        function handleDeletePhase(phaseId) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref) return;
+            ref.collection.splice(ref.index, 1);
+            builderExpandedPhaseIds.delete(phaseId);
+            ensureBuilderSelectionValidity();
+            renderLabelBuilderCanvas();
+        }
+
+        function ensureBuilderSelectionValidity() {
+            if (selectedBuilderPhaseId && !findPhaseRef(selectedBuilderPhaseId)) {
+                selectedBuilderPhaseId = labelBuilderPhases[0] ? labelBuilderPhases[0].id : null;
+            }
+            builderExpandedPhaseIds.forEach(id => {
+                if (!findPhaseRef(id)) {
+                    builderExpandedPhaseIds.delete(id);
+                }
+            });
+        }
+
+        function setSelectedBuilderPhase(phaseId, focusInput = false) {
+            selectedBuilderPhaseId = phaseId;
+            if (focusInput) {
+                builderFocusPhaseId = phaseId;
+            }
+            renderLabelBuilderCanvas();
+        }
+
+        function handleBuilderPhaseNameInput(phaseId, event) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref) return;
+            ref.phase.name = event.target.value;
+        }
+
+        function focusBuilderPhaseInput() {
+            if (!builderFocusPhaseId) return;
+            const canvas = document.getElementById('labelBuilderCanvas');
+            if (!canvas) return;
+            const target = canvas.querySelector(`[data-phase-input="${builderFocusPhaseId}"]`);
+            if (target) {
+                target.focus();
+                target.select();
+            }
+            builderFocusPhaseId = null;
+        }
+
+        function focusBuilderTaskInput() {
+            if (!builderFocusTaskKey) return;
+            const canvas = document.getElementById('labelBuilderCanvas');
+            if (!canvas) return;
+            const taskInput = canvas.querySelector(`[data-builder-task-input="${builderFocusTaskKey}"]`);
+            if (taskInput) {
+                taskInput.focus();
+                taskInput.select();
+            }
+            builderFocusTaskKey = null;
+        }
+
+        function toggleBuilderPhaseExpansion(phaseId) {
+            const container = document.querySelector(`[data-phase-tasks="${phaseId}"]`);
+            const chip = document.querySelector(`[data-phase-chip="${phaseId}"]`);
+            const templateBtn = chip ? chip.querySelector('.builder-template-btn') : null;
+            if (!container || !chip) return;
+            const isExpanded = builderExpandedPhaseIds.has(phaseId);
+            if (isExpanded) {
+                builderExpandedPhaseIds.delete(phaseId);
+                collapseBuilderTasks(container, chip, templateBtn);
+            } else {
+                builderExpandedPhaseIds.add(phaseId);
+                expandBuilderTasks(container, chip, templateBtn);
+            }
+        }
+
+        function expandBuilderTasks(container, chip, templateBtn) {
+            container.style.display = 'block';
+            container.style.overflow = 'hidden';
+            container.style.maxHeight = '0';
+            container.style.opacity = '0';
+            container.offsetHeight;
+            const targetHeight = container.scrollHeight;
+            container.classList.add('show');
+            requestAnimationFrame(() => {
+                container.style.maxHeight = targetHeight + 'px';
+                container.style.opacity = '1';
+            });
+            const onExpandEnd = (e) => {
+                if (e.propertyName !== 'max-height') return;
+                container.removeEventListener('transitionend', onExpandEnd);
+                container.style.maxHeight = 'none';
+                container.style.overflow = 'visible';
+            };
+            container.addEventListener('transitionend', onExpandEnd);
+            if (chip) chip.classList.add('expanded');
+            if (templateBtn) templateBtn.classList.add('is-open');
+        }
+
+        function collapseBuilderTasks(container, chip, templateBtn) {
+            container.style.overflow = 'hidden';
+            const startHeight = container.scrollHeight;
+            container.style.maxHeight = startHeight + 'px';
+            container.style.opacity = '1';
+            container.offsetHeight;
+            requestAnimationFrame(() => {
+                container.style.maxHeight = '0';
+                container.style.opacity = '0';
+            });
+            const onCollapseEnd = (e) => {
+                if (e.propertyName !== 'max-height') return;
+                container.removeEventListener('transitionend', onCollapseEnd);
+                container.classList.remove('show');
+                container.style.display = 'none';
+            };
+            container.addEventListener('transitionend', onCollapseEnd);
+            if (chip) chip.classList.remove('expanded');
+            if (templateBtn) templateBtn.classList.remove('is-open');
+        }
+
+        function addBuilderTask(phaseId) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref) return;
+            ref.phase.tasks = ref.phase.tasks || [];
+            ref.phase.tasks.push('');
+            builderFocusTaskKey = `${phaseId}:${ref.phase.tasks.length - 1}`;
+            builderExpandedPhaseIds.add(phaseId);
+            renderLabelBuilderCanvas();
+        }
+
+        function handleBuilderTaskInput(phaseId, index, event) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref || !ref.phase.tasks) return;
+            ref.phase.tasks[index] = event.target.value;
+            // If task was confirmed and user is editing, unconfirm it
+            const rowKey = `${phaseId}:${index}`;
+            if (builderConfirmedTasks.has(rowKey)) {
+                builderConfirmedTasks.delete(rowKey);
+                renderLabelBuilderCanvas();
+            }
+        }
+
+        function removeBuilderTask(phaseId, index) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref || !ref.phase.tasks) return;
+            const rowKey = `${phaseId}:${index}`;
+            builderConfirmedTasks.delete(rowKey); // Remove from confirmed set
+            ref.phase.tasks.splice(index, 1);
+            // Update confirmed tasks with higher indices (they shift down)
+            // Iterate backwards to avoid index conflicts
+            const tasks = ref.phase.tasks;
+            const keysToUpdate = [];
+            for (let i = index; i < tasks.length; i++) {
+                const oldKey = `${phaseId}:${i + 1}`;
+                if (builderConfirmedTasks.has(oldKey)) {
+                    keysToUpdate.push({ old: oldKey, new: `${phaseId}:${i}` });
+                }
+            }
+            // Apply updates
+            keysToUpdate.forEach(({ old, new: newKey }) => {
+                builderConfirmedTasks.delete(old);
+                builderConfirmedTasks.add(newKey);
+            });
+            renderLabelBuilderCanvas();
+        }
+
+        function confirmBuilderTask(phaseId, index) {
+            const ref = findPhaseRef(phaseId);
+            if (!ref || !ref.phase.tasks) return;
+            const value = (ref.phase.tasks[index] || '').trim();
+            if (!value) {
+                showNotification('Enter a template task first', 'error');
+                const input = document.querySelector(`[data-builder-task-input="${phaseId}:${index}"]`);
+                if (input) {
+                    input.focus();
+                    input.removeAttribute('readonly');
+                }
+                return;
+            }
+            ref.phase.tasks[index] = value;
+            const rowKey = `${phaseId}:${index}`;
+            builderConfirmedTasks.add(rowKey); // Mark as confirmed/saved
+            builderExpandedPhaseIds.add(phaseId);
+            builderConfirmFlashKey = rowKey;
+            if (index === ref.phase.tasks.length - 1) {
+                addBuilderTask(phaseId);
+            } else {
+                renderLabelBuilderCanvas();
+            }
+        }
+
+        function editBuilderTask(phaseId, index) {
+            const rowKey = `${phaseId}:${index}`;
+            builderConfirmedTasks.delete(rowKey); // Remove from confirmed set to unlock
+            renderLabelBuilderCanvas();
+            // Focus the input after a brief delay to ensure it's rendered
+            setTimeout(() => {
+                const input = document.querySelector(`[data-builder-task-input="${phaseId}:${index}"]`);
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }, 50);
+        }
+
+        function normalizePhaseTree(phases) {
+            return (phases || []).map(phase => ({
+                id: phase.id || `phase_${Date.now()}_${phaseCounter++}`,
+                name: (phase.name || '').trim(),
+                tasks: (phase.tasks || []).map(task => task.trim()).filter(Boolean),
+                subPhases: normalizePhaseTree(phase.subPhases || [])
+            })).filter(phase => phase.name);
+        }
+
 
         function openPendingFromStats(overdueOnly) {
             switchTab('pending');
@@ -3085,7 +4567,9 @@
                     exportType: isAutomatic ? 'automatic' : 'manual',
                     tasks: tasks,
                     customers: [...customers],
-                    clientsMeta: clientsMeta, // Include client notes, assigned status, and order
+                    clientsMeta: clientsMeta, // Include client notes, assigned status, order, and labels
+                    clientLabels: clientLabels, // Include global workflows
+                    simpleLabels: simpleLabels, // Include simple labels (independent of workflows)
                     stats: {
                         total: tasks.length,
                         pending: tasks.filter(t => !t.completed).length,
@@ -3357,7 +4841,7 @@
                     customers.add(customer);
                 });
                 
-                // Merge clientsMeta (notes, assigned status, order) with backwards compatibility
+                // Merge clientsMeta (notes, assigned status, order, labels) with backwards compatibility
                 // Only import if it exists in the export file (for backwards compatibility)
                 if (importData.clientsMeta && typeof importData.clientsMeta === 'object') {
                     // Merge with existing clientsMeta - don't replace, only add/update
@@ -3374,6 +4858,28 @@
                         }
                     });
                     saveClientsMeta();
+                }
+                
+                // Merge clientLabels (workflows) with backwards compatibility
+                if (importData.clientLabels && Array.isArray(importData.clientLabels)) {
+                    // Merge labels - add new ones that don't exist
+                    importData.clientLabels.forEach(label => {
+                        if (!clientLabels.includes(label)) {
+                            clientLabels.push(label);
+                        }
+                    });
+                    saveClientLabels();
+                }
+                
+                // Merge simpleLabels with backwards compatibility
+                if (importData.simpleLabels && Array.isArray(importData.simpleLabels)) {
+                    // Merge simple labels - add new ones that don't exist
+                    importData.simpleLabels.forEach(label => {
+                        if (!simpleLabels.some(l => l.id === label.id || l.name === label.name)) {
+                            simpleLabels.push(label);
+                        }
+                    });
+                    saveSimpleLabels();
                 }
                 
                 // Save merged data
@@ -3706,9 +5212,58 @@
                     customers = new Set(JSON.parse(savedCustomers));
                     persistLog('customers.load', { customersCount: customers.size });
                 }
+                // Load client labels first (needed for migration)
+                const savedLabels = localStorage.getItem('legalClientLabels');
+                if (savedLabels) {
+                    const parsed = JSON.parse(savedLabels);
+                    // Handle backward compatibility: convert old string array to new object structure
+                    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+                        // Old format: array of strings, convert to new format
+                        clientLabels = parsed.map((name, index) => ({
+                            id: `label_migrated_${Date.now()}_${index}`,
+                            name: name,
+                            phases: []
+                        }));
+                        saveClientLabels(); // Save in new format
+                    } else {
+                        clientLabels = parsed;
+                    }
+                } else {
+                    // Start with empty labels - user creates all
+                    clientLabels = [];
+                    saveClientLabels();
+                }
+                persistLog('clientLabels.load', { count: clientLabels.length });
+                
+                // Load simple labels
+                loadSimpleLabels();
+                
                 const savedClientsMeta = localStorage.getItem('legalClientsMeta');
                 if (savedClientsMeta) {
                     clientsMeta = JSON.parse(savedClientsMeta);
+                    // Migrate old labels format to new labelIds format
+                    let needsSave = false;
+                    Object.keys(clientsMeta).forEach(key => {
+                        const meta = clientsMeta[key];
+                        if (meta.labels && Array.isArray(meta.labels) && meta.labels.length > 0 && typeof meta.labels[0] === 'string') {
+                            // Old format: labels array of strings, convert to labelIds
+                            if (!meta.labelIds) {
+                                meta.labelIds = [];
+                            }
+                            // Try to match old label strings to new label IDs
+                            meta.labels.forEach(oldLabelName => {
+                                const matchingLabel = clientLabels.find(l => l.name === oldLabelName);
+                                if (matchingLabel && !meta.labelIds.includes(matchingLabel.id)) {
+                                    meta.labelIds.push(matchingLabel.id);
+                                }
+                            });
+                            delete meta.labels; // Remove old format
+                            needsSave = true;
+                        }
+                    });
+                    if (needsSave) {
+                        saveClientsMeta(); // Save migrated data
+                    }
                     persistLog('clientsMeta.load', clientsMeta);
                 }
                 
@@ -3759,6 +5314,296 @@
             }
         }
 
+        function saveClientLabels() {
+            try {
+                localStorage.setItem('legalClientLabels', JSON.stringify(clientLabels));
+                persistLog('clientLabels.save', { count: clientLabels.length });
+            } catch (e) {
+                console.error('Error saving client labels', e);
+                persistLog('clientLabels.save.error', { error: String(e) });
+            }
+        }
+
+        function renderClientLabels(clientKey) {
+            const meta = clientsMeta[clientKey] || {};
+            const labelIds = meta.labelIds || [];
+            if (labelIds.length === 0) return '';
+            
+            // Separate labels and workflows
+            const labels = [];
+            const workflows = [];
+            
+            labelIds.forEach(id => {
+                const simpleLabel = simpleLabels.find(l => l.id === id);
+                if (simpleLabel) {
+                    labels.push(simpleLabel);
+                } else {
+                    const workflowLabel = clientLabels.find(l => l.id === id);
+                    if (workflowLabel) {
+                        workflows.push(workflowLabel);
+                    }
+                }
+            });
+            
+            if (labels.length === 0 && workflows.length === 0) return '';
+            
+            return `
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                    ${labels.map(label => `
+                        <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: var(--secondary-color); color: var(--white); border-radius: 12px; font-size: 0.8rem; font-weight: 500;">
+                            <i class="fas fa-tag" style="font-size: 0.7rem; margin-right: 4px;"></i>
+                            ${escapeHtml(label.name)}
+                        </span>
+                    `).join('')}
+                    ${workflows.map(workflow => `
+                        <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: #764ba2; color: var(--white); border-radius: 12px; font-size: 0.8rem; font-weight: 500;">
+                            <i class="fas fa-project-diagram" style="font-size: 0.7rem; margin-right: 4px;"></i>
+                            ${escapeHtml(workflow.name)}
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderClientTimeline(clientKey) {
+            const meta = clientsMeta[clientKey] || {};
+            const currentPhase = meta.currentPhase;
+            if (!currentPhase) return '';
+            
+            const label = clientLabels.find(l => l.id === currentPhase.labelId);
+            if (!label || !label.phases) return '';
+            
+            const findPhase = (phases, phaseId) => {
+                for (const phase of phases) {
+                    if (phase.id === phaseId) return phase;
+                    if (phase.subPhases) {
+                        const found = findPhase(phase.subPhases, phaseId);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            const currentPhaseObj = findPhase(label.phases, currentPhase.phaseId);
+            const currentPhaseTasks = currentPhaseObj && currentPhaseObj.tasks ? currentPhaseObj.tasks : [];
+            
+            const addedTasks = meta.addedTemplateTasks || [];
+            const availableTasks = currentPhaseTasks.filter(task => !addedTasks.includes(task.trim()));
+            
+            const tasksToggleId = `tasks_${clientKey}_${currentPhase.phaseId}`;
+            const tasksVisible = meta.tasksVisible !== undefined ? meta.tasksVisible : true;
+            
+            const parentPhases = label.phases.slice();
+            const subPhaseGroups = new Map();
+            parentPhases.forEach(parent => {
+                if (parent.subPhases && parent.subPhases.length > 0) {
+                    subPhaseGroups.set(parent.id, parent.subPhases);
+                }
+            });
+            
+            let currentParentIndex = -1;
+            let currentSubIndex = -1;
+            parentPhases.forEach((parent, idx) => {
+                if (parent.id === currentPhase.phaseId) {
+                    currentParentIndex = idx;
+                    currentSubIndex = -1;
+                } else if (parent.subPhases) {
+                    const subIdx = parent.subPhases.findIndex(sp => sp.id === currentPhase.phaseId);
+                    if (subIdx !== -1) {
+                        currentParentIndex = idx;
+                        currentSubIndex = subIdx;
+                    }
+                }
+            });
+            if (currentParentIndex === -1) return '';
+            
+            const timelineMarkup = parentPhases.map((parentPhase, parentIndex) => {
+                const subPhases = subPhaseGroups.get(parentPhase.id) || [];
+                const isPastParent = parentIndex < currentParentIndex;
+                const isCurrentParent = parentIndex === currentParentIndex;
+                const parentState = isPastParent ? 'is-past' : isCurrentParent ? 'is-current' : 'is-future';
+                
+                const parentPhaseMarkup = `
+                    <div class="timeline-phase ${parentState}" onclick="event.stopPropagation(); changeClientPhase('${clientKey}', '${currentPhase.labelId}', '${parentPhase.id}')">
+                        ${escapeHtml(parentPhase.name)}
+                    </div>
+                `;
+                
+                let subPhaseTrack = '';
+                if (subPhases.length > 0) {
+                    subPhaseTrack = `
+                        <div class="timeline-track">
+                            ${subPhases.map((subPhase, subIndex) => {
+                                let subState = 'is-future';
+                                if (parentIndex < currentParentIndex) {
+                                    subState = 'is-past';
+                                } else if (parentIndex > currentParentIndex) {
+                                    subState = 'is-future';
+                                } else {
+                                    if (currentSubIndex === -1) {
+                                        subState = 'is-future';
+                                    } else if (subIndex < currentSubIndex) {
+                                        subState = 'is-past';
+                                    } else if (subIndex === currentSubIndex) {
+                                        subState = 'is-current';
+                                    } else {
+                                        subState = 'is-future';
+                                    }
+                                }
+                                
+                                return `
+                                    <div class="timeline-subphase ${subState}" onclick="event.stopPropagation(); changeClientPhase('${clientKey}', '${currentPhase.labelId}', '${subPhase.id}')">
+                                        ${escapeHtml(subPhase.name)}
+                                    </div>
+                                    ${subIndex < subPhases.length - 1 ? `<div class="timeline-track-connector ${subState === 'is-past' ? 'is-past' : 'is-future'}"></div>` : ''}
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+                
+                const column = `
+                    <div class="timeline-column">
+                        ${parentPhaseMarkup}
+                        ${subPhaseTrack}
+                    </div>
+                `;
+                
+                const connectorClass = parentIndex < parentPhases.length - 1
+                    ? (parentIndex < currentParentIndex ? 'is-past' : 'is-future')
+                    : '';
+                const connector = parentIndex < parentPhases.length - 1 ? `<div class="timeline-column-connector ${connectorClass}"></div>` : '';
+                
+                return column + connector;
+            }).join('');
+            
+            return `
+                <div class="client-tasks-section" style="margin-bottom: 15px;">
+                    <div class="client-timeline">
+                        ${timelineMarkup}
+                    </div>
+                    ${availableTasks.length > 0 ? `
+                        <div style="margin-top: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <button onclick="event.stopPropagation(); toggleTasksVisibility('${clientKey}')" style="
+                                    background: none;
+                                    border: none;
+                                    color: var(--light-text);
+                                    cursor: pointer;
+                                    padding: 4px;
+                                    font-size: 0.85rem;
+                                " title="${tasksVisible ? 'Hide' : 'Show'} template tasks">
+                                    <i class="fas fa-${tasksVisible ? 'minus' : 'plus'}" style="margin-right: 4px;"></i>
+                                    ${tasksVisible ? 'Hide' : 'Show'} Template Tasks (${availableTasks.length})
+                                </button>
+                            </div>
+                            <div id="${tasksToggleId}" style="display: ${tasksVisible ? 'block' : 'none'}; margin-left: 12px;">
+                                ${availableTasks.map((taskTitle, taskIndex) => `
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px; border-radius: 4px; transition: background 0.2s;" 
+                                         onmouseenter="this.style.background='rgba(52, 152, 219, 0.1)'" 
+                                         onmouseleave="this.style.background='transparent'">
+                                        <span style="flex: 1; font-size: 0.85rem; color: var(--dark-text);">${escapeHtml(taskTitle)}</span>
+                                        <button onclick="event.stopPropagation(); createTaskFromTemplate('${clientKey}', '${escapeHtml(taskTitle).replace(/'/g, "\\'")}')" 
+                                                style="background: var(--secondary-color); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.75rem;" 
+                                                title="Add this task">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function changeClientPhase(clientKey, labelId, phaseId) {
+            const label = clientLabels.find(l => l.id === labelId);
+            if (!label) return;
+            
+            const findPhase = (phases, id, path = []) => {
+                for (const phase of phases) {
+                    const currentPath = [...path, phase.name];
+                    if (phase.id === id) {
+                        return { phase, path: currentPath };
+                    }
+                    if (phase.subPhases) {
+                        const found = findPhase(phase.subPhases, id, currentPath);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            
+            const result = findPhase(label.phases, phaseId);
+            if (!result) return;
+            
+            clientsMeta[clientKey] = clientsMeta[clientKey] || {};
+            // Preserve expanded state
+            const wasExpanded = clientsMeta[clientKey].expanded || false;
+            clientsMeta[clientKey].currentPhase = {
+                labelId: labelId,
+                phaseId: phaseId,
+                phasePath: result.path
+            };
+            clientsMeta[clientKey].expanded = wasExpanded; // Keep expanded state
+            saveClientsMeta();
+            
+            if (currentTab === 'clients') renderClients();
+            showNotification(`Moved to phase "${result.phase.name}"`, 'success');
+        }
+        
+        function toggleTasksVisibility(clientKey) {
+            clientsMeta[clientKey] = clientsMeta[clientKey] || {};
+            // Preserve expanded state
+            const wasExpanded = clientsMeta[clientKey].expanded || false;
+            clientsMeta[clientKey].tasksVisible = !clientsMeta[clientKey].tasksVisible;
+            clientsMeta[clientKey].expanded = wasExpanded; // Keep expanded state
+            saveClientsMeta();
+            if (currentTab === 'clients') renderClients();
+        }
+        
+        function createTaskFromTemplate(clientKey, taskTitle) {
+            const client = getClientsArray().find(c => c.key === clientKey);
+            if (!client) return;
+            
+            // Track that this template task was added
+            clientsMeta[clientKey] = clientsMeta[clientKey] || {};
+            if (!clientsMeta[clientKey].addedTemplateTasks) {
+                clientsMeta[clientKey].addedTemplateTasks = [];
+            }
+            clientsMeta[clientKey].addedTemplateTasks.push(taskTitle.trim());
+            // Preserve expanded state
+            const wasExpanded = clientsMeta[clientKey].expanded || false;
+            clientsMeta[clientKey].expanded = wasExpanded;
+            
+            const task = {
+                id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+                title: taskTitle.trim(),
+                description: '',
+                customer: clientKey,
+                reminderDateTime: '',
+                completed: false,
+                createdAt: new Date().toISOString(),
+                completedAt: null,
+                subTasks: []
+            };
+            
+            tasks.push(task);
+            saveTasks();
+            saveClientsMeta();
+            updateStats();
+            updateCustomerList();
+            updateCustomerSuggestions();
+            filterTasks();
+            
+            showNotification(`Task "${taskTitle}" created`, 'success');
+            
+            if (currentTab === 'clients') {
+                renderClients();
+            }
+        }
+
+
         function renderClients() {
             const taskList = document.getElementById('taskList');
             if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
@@ -3789,7 +5634,7 @@
                     <div class="empty-state">
                         <i class="fas fa-users"></i>
                         <h3>No ${myClientsOnly ? 'assigned' : ''} clients</h3>
-                        <p>${allClients.length === 0 ? 'Add tasks with customer names to populate clients.' : 'Assign clients to yourself or clear filters.'}</p>
+                        <p>${allClients.length === 0 ? 'Add your first task to get started.' : 'Assign clients to yourself or clear filters.'}</p>
                     </div>
                 `;
                 return;
@@ -3808,9 +5653,13 @@
                 const totalTasks = clientTasks.length;
                 
                 // Generate task list HTML
-                const tasksHTML = totalTasks > 0 ? `
-                    <div class="client-tasks-list" style="display: none;">
+                const timelineHTML = renderClientTimeline(c.key);
+                const meta = clientsMeta[c.key] || {};
+                const isExpanded = meta.expanded || false;
+                const tasksHTML = (totalTasks > 0 || timelineHTML) ? `
+                    <div class="client-tasks-list" style="display: ${isExpanded ? 'block' : 'none'};">
                         <div class="client-tasks-inner">
+                            ${timelineHTML}
                             ${pendingTasks.length > 0 ? `
                                 <div class="client-tasks-section">
                                     <div style="font-weight: 600; color: var(--secondary-color); margin-bottom: 10px; font-size: 0.9rem;">
@@ -3845,8 +5694,8 @@
                 return `
                 <div class="task-item client-item${c.archived ? ' archived' : ''}" data-client-key="${escapeHtml(c.key)}" onclick="toggleClientExpansion('${c.key.replace(/'/g, "&#39;")}')" style="cursor: pointer;">
                     <div class="task-controls">
-                        ${totalTasks > 0 ? `
-                            <button class="task-control-btn client-expand-btn" onclick="event.stopPropagation(); toggleClientExpansion('${c.key.replace(/'/g, "&#39;")}')" title="Expand/Collapse tasks">
+                        ${(totalTasks > 0 || timelineHTML) ? `
+                            <button class="task-control-btn client-expand-btn" onclick="event.stopPropagation(); toggleClientExpansion('${c.key.replace(/'/g, "&#39;")}')" title="Expand/Collapse">
                                 <i class="fas fa-chevron-down client-expand-icon" style="transition: transform 0.3s ease;"></i>
                             </button>
                         ` : ''}
@@ -3855,6 +5704,12 @@
                         </button>
                         <button class="task-control-btn" onclick="event.stopPropagation(); moveClientToTop('${c.key.replace(/'/g, "&#39;")}')" title="Move to Top">
                             <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button class="task-control-btn" onclick="event.stopPropagation(); quickAddLabel('${c.key.replace(/'/g, "&#39;")}')" title="Add Label">
+                            <i class="fas fa-tag"></i>
+                        </button>
+                        <button class="task-control-btn" onclick="event.stopPropagation(); showClientWorkflows('${c.key.replace(/'/g, "&#39;")}')" title="Manage Workflows">
+                            <i class="fas fa-project-diagram"></i>
                         </button>
                         <button class="task-control-btn" onclick="event.stopPropagation(); showClientInfo('${c.key.replace(/'/g, "&#39;")}')" title="Client Information">
                             <i class="fas fa-info-circle"></i>
@@ -3875,6 +5730,7 @@
                             <div class="task-title" style="flex: 1;">
                                 ${escapeHtml(c.name)}
                                 ${clientsMeta[c.key] && clientsMeta[c.key].notes ? `<div style="color: var(--light-text); font-size: 0.9rem; margin-top: 5px; line-height: 1.4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 400;">${escapeHtml(clientsMeta[c.key].notes)}</div>` : ''}
+                                ${renderClientLabels(c.key)}
                                 ${c.archived ? `<span class=\"client-archived-badge\"><i class=\"fas fa-box-archive\"></i> Archived</span>` : ''}
                             </div>
                         </div>
@@ -3934,6 +5790,10 @@
             
             // Check current state based on display property
             const isExpanded = tasksList.style.display !== 'none' && tasksList.style.display !== '';
+            // Save expanded state to meta
+            clientsMeta[clientKey] = clientsMeta[clientKey] || {};
+            clientsMeta[clientKey].expanded = !isExpanded;
+            saveClientsMeta();
             const currentDisplay = tasksList.style.display;
             const currentMaxHeight = tasksList.style.maxHeight;
             const currentOpacity = tasksList.style.opacity;
